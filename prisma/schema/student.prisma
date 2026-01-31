@@ -1,0 +1,90 @@
+//student related schema
+
+enum BookingStatus {
+    PENDING
+    CONFIRMED
+    COMPLETED
+    CANCELLED
+}
+
+model Booking {
+    id                 String           @id @default(uuid())
+    studentId          String //betterAuth user reference
+    user               User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+    tutorProfileId     String
+    availabilitySlotId String           @unique
+    price              Float
+    status             BookingStatus    @default(PENDING)
+    createdAt          DateTime         @default(now())
+    updatedAt          DateTime         @updatedAt
+    tutorProfile       TutorProfile     @relation(fields: [tutorProfileId], references: [id])
+    availabilitySlot   AvailabilitySlot @relation(fields: [availabilitySlotId], references: [id])
+    payment            Payment?
+    review             Review?
+
+    @@index([studentId])
+    @@index([tutorProfileId])
+    @@index([status])
+    @@map("bookings")
+}
+
+enum PaymentStatus {
+    PENDING
+    SUCCESS
+    FAILED
+}
+
+enum PaymentMethod {
+    BKASH
+    NAGAD
+    ROKET
+    CREDITCARD
+    DEBITCARD
+}
+
+model Payment {
+    id            String        @id @default(uuid())
+    bookingId     String        @unique
+    studentId     String //betterAuth user reference
+    user          User          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+    paymentMethod PaymentMethod // Bkash, Nagad, etc.
+    transactionId String        @unique
+    amount        Float
+    status        PaymentStatus @default(PENDING)
+    submittedAt   DateTime      @default(now())
+    verifiedAt    DateTime?
+
+    booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+    @@index([studentId])
+    @@index([status])
+    @@index([transactionId])
+    @@map("payments")
+}
+
+model PlatformPaymentAccount {
+    id            String        @id @default(uuid())
+    method        PaymentMethod
+    accountNumber String
+    isActive      Boolean       @default(true)
+
+    @@map("platform_payment_accounts")
+}
+
+// --- Reviews ---
+
+model Review {
+    id             String   @id @default(cuid())
+    bookingId      String   @unique
+    studentId      String //betterAuth user reference
+    user           User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+    tutorProfileId String
+    rating         Int // 1 to 5
+    comment        String?  @db.Text
+    createdAt      DateTime @default(now())
+
+    booking      Booking      @relation(fields: [bookingId], references: [id])
+    tutorProfile TutorProfile @relation(fields: [tutorProfileId], references: [id])
+
+    @@map("reviews")
+}

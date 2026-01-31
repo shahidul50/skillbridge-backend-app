@@ -6,9 +6,18 @@
 
 generator client {
   provider = "prisma-client"
-  output   = "../generated/prisma"
+  output   = "../../generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+model Category {
+  id              String          @id @default(uuid())
+  name            String          @unique
+  createdAt       DateTime        @default(now())
+  tutorCategories TutorCategory[]
+
+  @@map("categories")
 }

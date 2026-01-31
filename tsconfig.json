@@ -10,7 +10,7 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "target": "es2023",
-    "types": [],
+    "types": ["node"],
     // For nodejs:
     // "lib": ["esnext"],
     // "types": ["node"],
@@ -44,5 +44,5 @@
     "skipLibCheck": true,
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/generated"]
+  "exclude": ["node_modules", "dist", "generated/prisma"]
 }

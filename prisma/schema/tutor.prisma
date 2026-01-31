@@ -1,0 +1,79 @@
+//tutor related schema
+
+model TutorProfile {
+    id                          String                       @id @default(uuid())
+    userId                      String                       @unique //betterAuth user reference
+    user                        User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+    title                       String                       @db.VarChar(150)
+    bio                         String                       @db.Text
+    hourlyRate                  Int
+    experience                  String                       @db.Text
+    rating                      Float                        @default(0.0)
+    totalReviews                Int                          @default(0)
+    createdAt                   DateTime                     @default(now())
+    updatedAt                   DateTime                     @updatedAt
+    tutorCategories             TutorCategory[]
+    tutorWeeklyAvailabilities   TutorWeeklyAvailability[]
+    tutorAvailabilityExceptions TutorAvailabilityException[]
+    availabilitySlots           AvailabilitySlot[]
+    bookings                    Booking[]
+    reviews                     Review[]
+
+    @@index([hourlyRate])
+    @@index([rating])
+    @@index([userId])
+    @@map("tutor_profiles")
+}
+
+model TutorCategory {
+    id             String       @id @default(uuid())
+    tutorProfileId String
+    tutorProfile   TutorProfile @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
+    categoryId     String
+    category       Category     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+    createdAt      DateTime     @default(now())
+
+    @@index([tutorProfileId])
+    @@index([categoryId])
+    @@map("tutor_categories")
+}
+
+model TutorWeeklyAvailability {
+    id             String       @id @default(uuid())
+    tutorProfileId String
+    tutorProfile   TutorProfile @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
+    dayOfWeek      String // Monday, Tuesday, etc.
+    startTime      String // "09:00"
+    endTime        String // "10:00"
+    isActive       Boolean      @default(true)
+    createdAt      DateTime     @default(now())
+
+    @@map("weekly_availabilities")
+}
+
+model TutorAvailabilityException {
+    id             String       @id @default(uuid())
+    tutorProfileId String
+    tutorProfile   TutorProfile @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
+    date           DateTime // Specific date for the exception
+    reason         String?      @db.Text
+    createdAt      DateTime     @default(now())
+
+    @@map("availability_exceptions")
+}
+
+model AvailabilitySlot {
+    id             String       @id @default(cuid())
+    tutorProfileId String
+    tutorProfile   TutorProfile @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
+    date           DateTime
+    startTime      String
+    endTime        String
+    isBooked       Boolean      @default(false)
+    createdAt      DateTime     @default(now())
+    booking        Booking?
+
+    @@index([tutorProfileId, date])
+    @@index([isBooked])
+    @@map("availability_slots")
+}
