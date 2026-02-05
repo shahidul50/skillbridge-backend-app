@@ -1,10 +1,44 @@
 import { prisma } from "../../lib/prisma";
-import { AppError } from "../../utils/AppError";
 
 //get all categories
-const getAllCategories = async () => {
-    console.log("Get All Categories Function from category.service.ts")
-}
+const getAllCategories = async (payload: {
+    page: number;
+    limit: number;
+    skip: number;
+    sortBy: string;
+    sortOrder: string;
+    searchTerm: string | undefined;
+}) => {
+
+    // Search and filter options
+    const whereOptions = payload.searchTerm ? {
+        name: {
+            contains: payload.searchTerm,
+            mode: 'insensitive' as const,
+        }
+    } : {};
+
+    const [categories, total] = await Promise.all([
+        prisma.category.findMany({
+            where: whereOptions,
+            skip: payload.skip,
+            take: payload.limit,
+            orderBy: {
+                [payload.sortBy]: payload.sortOrder,
+            },
+        }),
+        prisma.category.count({ where: whereOptions }),
+    ]);
+    return {
+        data: categories,
+        pagination: {
+            total,
+            page: payload.page,
+            limit: payload.limit,
+            totalPages: Math.ceil(total / payload.limit),
+        }
+    }
+};
 
 //check if category name already exists
 const isExistingCategory = async (name: string) => {
@@ -18,14 +52,12 @@ const isExistingCategory = async (name: string) => {
 //create new category
 const createCategory = async (data: { name: string, image: string }) => {
 
-    const result = await prisma.category.create({
+    return await prisma.category.create({
         data: {
             name: data.name,
             image: data.image,
         },
     });
-
-    return result;
 }
 
 const categoryService = {

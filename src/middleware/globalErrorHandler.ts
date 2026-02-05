@@ -79,8 +79,9 @@ const errorHandler = (err: any, req: Request, res: Response, next: NextFunction)
 
     // --- PRISMA VALIDATION OR CONNECTION ---
     else if (err instanceof Prisma.PrismaClientValidationError) {
+        errorCode = "PRISMA_VALIDATION_ERROR";
         statusCode = 400;
-        message = "Invalid data format provided to database.";
+        message = "Invalid data format. Please check your input.";
     }
 
     // --- FINAL JSON RESPONSE ---

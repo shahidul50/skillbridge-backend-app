@@ -1,14 +1,25 @@
 import { NextFunction, Request, Response } from "express";
 import categoryService from "./category.service";
 import { AppError } from "../../utils/AppError";
-import { createCategorySchema } from "../../validation/category.validation";
+import { categoryQuerySchema, createCategorySchema } from "../../validation/category.validation";
 import cloudinary from "../../lib/cloudinary";
 import fs from "fs/promises";
 
 //get all categories
 const getAllCategories = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const result = await categoryService.getAllCategories();
+
+        // validate query parameters
+        const validatedQuery = categoryQuerySchema.parse({
+            query: req.query
+        });
+
+        const { page, limit, sortBy, sortOrder, searchTerm } = validatedQuery.query;
+        const skip = (page - 1) * limit;
+
+
+
+        const result = await categoryService.getAllCategories({ page, limit, skip, sortBy, sortOrder, searchTerm, });
         res.status(200).json({
             success: true,
             message: 'Categories fetched successfully',
