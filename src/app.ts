@@ -11,6 +11,7 @@ import { reviewRouter } from './modules/review/review.router';
 const app: Application = express();
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(
     cors({
         origin: process.env.APP_URL,
