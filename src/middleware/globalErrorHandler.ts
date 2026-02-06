@@ -3,6 +3,7 @@ import { Prisma } from "../../generated/prisma/client";
 import { APIError } from "better-auth/api";
 import { ZodError } from "zod";
 import { AppError } from "../utils/AppError";
+import { BetterAuthError } from "better-auth";
 
 const errorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
     // Set default values
@@ -11,11 +12,13 @@ const errorHandler = (err: any, req: Request, res: Response, next: NextFunction)
     let errorCode = err.code ?? "INTERNAL_SERVER_ERROR";
     let errorDetails = err;
 
+
     // --- CUSTOM APP ERROR (My created error) ---
     if (err instanceof AppError) {
         statusCode = err.statusCode;
         message = err.message;
         errorCode = err.code;
+
     }
 
     //-- Multer File Upload Errors --
@@ -57,6 +60,12 @@ const errorHandler = (err: any, req: Request, res: Response, next: NextFunction)
         if (err.code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL") {
             message = "This email is already registered.";
         }
+    }
+
+    else if (err?.code === 'INVALID_EMAIL_OR_PASSWORD') {
+        statusCode = 401;
+        errorCode = 'INVALID_EMAIL_OR_PASSWORD';
+        message = 'Invalid email or password. Please try again.';
     }
 
     // --- PRISMA CLIENT ERRORS ---

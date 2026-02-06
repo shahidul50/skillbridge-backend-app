@@ -17,7 +17,7 @@ const getUserProfile = async (loggedUserId: string) => {
     });
 }
 
-const updateUserProfile = async (loggedUserId: string, updateData: { name: string, image?: string, phoneNumber?: string }) => {
+const updateUserProfile = async (loggedUserId: string, updateData: { name?: string, image?: string, phoneNumber?: string }) => {
     return await prisma.user.update({
         where: {
             id: loggedUserId

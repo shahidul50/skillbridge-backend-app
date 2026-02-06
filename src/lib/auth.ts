@@ -4,6 +4,7 @@ import { prisma } from "./prisma";
 import nodemailer from "nodemailer";
 import { createAuthMiddleware } from "better-auth/api";
 
+
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
   port: 587,
@@ -22,7 +23,7 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     autoSignIn: false,
-    requireEmailVerification: true,
+    requireEmailVerification: false,
   },
   trustedOrigins: [process.env.APP_URL!],
   user: {
@@ -72,6 +73,19 @@ export const auth = betterAuth({
         }
 
       }
+
+      if (url.pathname.endsWith("/sign-in/email")) {
+
+        if (!context.body?.email) {
+          throw new APIError("BAD_REQUEST", {
+            message: "Email is required",
+          });
+        } else if (!context.body?.password) {
+          throw new APIError("BAD_REQUEST", {
+            message: "Password is required",
+          });
+        }
+      }
       return context;
     },
     after: createAuthMiddleware(async (ctx) => {
@@ -102,7 +116,7 @@ export const auth = betterAuth({
     }),
   },
   emailVerification: {
-    sendOnSignUp: true,
+    sendOnSignUp: false,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url, token }, request) => {
       try {
@@ -250,4 +264,5 @@ export const auth = betterAuth({
       }
     },
   },
+
 });

@@ -1,10 +1,18 @@
 import { NextFunction, Request, Response } from "express";
 import tutorService from "./tutor.service";
+import fs from "fs/promises";
+import { AppError } from "../../utils/AppError";
+import { setTutorCategoriesSchema, tutorQuerySchema, updateTutorSchema } from "../../validation/tutor.validation";
+import cloudinary from "../../lib/cloudinary";
 
 //get all tutors with pagination, search and filtering.
 const getAllTutors = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const result = await tutorService.getAllTutors();
+
+        // Zod Validation (Query parameters)
+        const validatedQuery = tutorQuerySchema.parse({ query: req.query }).query;
+
+        const result = await tutorService.getAllTutors(validatedQuery);
         res.status(200).json({
             success: true,
             message: 'Tutors fetched successfully',
@@ -18,24 +26,98 @@ const getAllTutors = async (req: Request, res: Response, next: NextFunction) => 
 //get all tutor by id with tutor profile, review, availability.
 const getTutorById = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const result = await tutorService.getTutorById();
-        res.status(200).json({
-            success: true,
-            message: 'Tutor fetched successfully',
-            data: result
-        });
+        // const result = await tutorService.getTutorById();
+        // res.status(200).json({
+        //     success: true,
+        //     message: 'Tutor fetched successfully',
+        //     data: result
+        // });
     } catch (err: any) {
         next(err);
     }
 }
 
+
 //update tutor profile
-const updateTutor = async (req: Request, res: Response, next: NextFunction) => {
+const updateTutorProfile = async (req: Request, res: Response, next: NextFunction) => {
+    let localFilePath: string | undefined = req.file?.path;
     try {
-        const result = await tutorService.updateTutor();
+        const tutorId: string = req.user?.id as string;
+        if (!tutorId) throw new AppError("Unauthorized", 401, "AUTH_ERROR");
+
+        // Zod validation
+        const validation = updateTutorSchema.safeParse({ body: req.body });
+        if (!validation.success) throw validation.error;
+
+        const updateData: any = { ...validation.data.body };
+
+        //Image upload to Cloudinary if new image is provided
+        if (localFilePath) {
+            const currentUser = await tutorService.getTutorById(tutorId);
+
+            // new image upload
+            const cloudinaryResult = await cloudinary.uploader.upload(localFilePath, {
+                folder: "skillbridge/tutors",
+            });
+
+            updateData.image = cloudinaryResult.secure_url;
+
+            // If there was a previous image, delete it from Cloudinary
+            if (currentUser?.image) {
+                const publicId = currentUser.image.split("/").pop()?.split(".")[0];
+                if (publicId) {
+                    await cloudinary.uploader.destroy(`skillbridge/tutors/${publicId}`).catch(() => { });
+                }
+            }
+        }
+
+        const updatableData = {
+            userProfile: {
+                name: updateData.name,
+                phoneNumber: updateData.phoneNumber,
+                image: updateData.image,
+            },
+            tutorProfile: {
+                title: updateData.title,
+                bio: updateData.bio,
+                hourlyRate: updateData.hourlyRate,
+                experience: updateData.experience,
+            }
+        }
+
+        const result = await tutorService.updateTutorProfile(tutorId, updatableData);
+        if (result) {
+            if (localFilePath) await fs.unlink(localFilePath);
+        }
         res.status(200).json({
             success: true,
-            message: 'Update Tutor successfully',
+            message: 'Update tutor profile successfully',
+            data: result
+        });
+    } catch (err: any) {
+        if (localFilePath) await fs.unlink(localFilePath);
+        next(err);
+    }
+}
+
+//set tutor categories
+const setTutorCategories = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const tutorId = req.user?.id;
+        console.log(req.body)
+
+        const tutorProfile = await tutorService.getTutorProfileByUserId(tutorId!);
+        if (!tutorProfile) throw new AppError("Tutor profile not found", 404, "NOT_FOUND");
+
+        // ২. Zod validation
+        const validation = setTutorCategoriesSchema.safeParse({ body: req.body });
+        // if (!validation.success) throw new AppError("Validation failed", 400, validation.error.message);
+        if (!validation.success) throw validation.error;
+
+        const result = await tutorService.setTutorCategories(tutorProfile.id, validation.data.body.categoryId);
+        res.status(200).json({
+            success: true,
+            message: 'Tutor categories set successfully',
             data: result
         });
     } catch (err: any) {
@@ -116,7 +198,8 @@ const createTutorException = async (req: Request, res: Response, next: NextFunct
 const tutorController = {
     getAllTutors,
     getTutorById,
-    updateTutor,
+    updateTutorProfile,
+    setTutorCategories,
     getTutorAllSession,
     updateBookingStatus,
     createTutorAvailableSlot,
