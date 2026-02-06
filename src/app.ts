@@ -8,6 +8,7 @@ import { categoryRouter } from './modules/category/category.router';
 import { tutorRouter } from './modules/tutor/tutor.router';
 import { bookingRouter } from './modules/booking/booking.router';
 import { reviewRouter } from './modules/review/review.router';
+import authRouter from './modules/auth/auth.router';
 const app: Application = express();
 
 app.use(express.json());
@@ -25,6 +26,7 @@ app.get('/', (req, res) => {
     res.send('Welcome to SkillBridge Backend App');
 });
 
+app.use('/api/v1/profile', authRouter);
 app.use('/api/v1/categories', categoryRouter);
 app.use('/api/v1/tutors', tutorRouter);
 app.use('/api/v1/bookings', bookingRouter);
