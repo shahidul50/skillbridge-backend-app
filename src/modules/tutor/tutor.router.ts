@@ -16,8 +16,11 @@ router.get('/:id', tutorController.getTutorById);
 
 router.post('/add-categories', auth(UserRole.TUTOR), tutorController.setTutorCategories);
 
+//  /weekly-available route for creating weekly availability slot
+router.post('/weekly-available', auth(UserRole.TUTOR), tutorController.createTutorWeeklyAvailability);
+
 //  /available-slot route for creating weekly availability slot
-router.post('/available-slot', tutorController.createTutorAvailableSlot);
+// router.post('/available-slot', auth(UserRole.TUTOR), tutorController.createTutorAvailableSlot);
 
 //  /exception route for creating exception on a special day
 router.post('/exception', auth(UserRole.TUTOR), tutorController.createTutorException);
@@ -28,8 +31,8 @@ router.patch('/sessions/:bookingId', tutorController.updateBookingStatus);
 //  / route for updating tutor information
 router.put('/', auth(UserRole.TUTOR), uploadHandler.single('avatar'), tutorController.updateTutorProfile);
 
-//  /available-slot/:id route for deleting weekly availability slot
-router.delete('/available-slot/:id', tutorController.deleteTutorAvailableSlot);
+//  /weekly-available/:id route for deleting single weekly availability slot
+router.delete('/weekly-available/:id', auth(UserRole.TUTOR), tutorController.deleteTutorWeeklyAvailability);
 
 
 

@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import tutorService from "./tutor.service";
 import fs from "fs/promises";
 import { AppError } from "../../utils/AppError";
-import { createTutorExceptionSchema, setTutorCategoriesSchema, tutorQuerySchema, updateTutorSchema } from "../../validation/tutor.validation";
+import { createTutorExceptionSchema, createWeeklyAvailabilitySchema, deleteWeeklyAvailabilitySchema, setTutorCategoriesSchema, tutorQuerySchema, updateTutorSchema } from "../../validation/tutor.validation";
 import cloudinary from "../../lib/cloudinary";
 
 //get all tutors with pagination, search and filtering.
@@ -153,12 +153,21 @@ const updateBookingStatus = async (req: Request, res: Response, next: NextFuncti
 }
 
 //Create weekly availability slot.
-const createTutorAvailableSlot = async (req: Request, res: Response, next: NextFunction) => {
+const createTutorWeeklyAvailability = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const result = await tutorService.createTutorAvailableSlot();
-        res.status(200).json({
+        const tutorId = req.user?.id;
+
+        const tutorProfile = await tutorService.getTutorProfileByUserId(tutorId!);
+        if (!tutorProfile) throw new AppError("Tutor profile not found", 404, "NOT_FOUND");
+
+        // Zod validation
+        const validation = createWeeklyAvailabilitySchema.safeParse({ body: req.body });
+        if (!validation.success) throw validation.error;
+
+        const result = await tutorService.createTutorWeeklyAvailability(tutorProfile.id, validation.data.body);
+        res.status(201).json({
             success: true,
-            message: 'Tutor available slot created successfully',
+            message: 'Tutor weekly availability created successfully',
             data: result
         });
     } catch (err: any) {
@@ -167,12 +176,20 @@ const createTutorAvailableSlot = async (req: Request, res: Response, next: NextF
 }
 
 //delete weekly availability slot.
-const deleteTutorAvailableSlot = async (req: Request, res: Response, next: NextFunction) => {
+const deleteTutorWeeklyAvailability = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const result = await tutorService.deleteTutorAvailableSlot();
+        const tutorId = req.user?.id;
+        const tutorProfile = await tutorService.getTutorProfileByUserId(tutorId!);
+        if (!tutorProfile) throw new AppError("Tutor profile not found", 404, "NOT_FOUND");
+
+        // Zod validation
+        const validation = deleteWeeklyAvailabilitySchema.safeParse({ params: req.params });
+        if (!validation.success) throw validation.error;
+
+        const result = await tutorService.deleteTutorWeeklyAvailability(tutorProfile.id, validation.data.params.id);
         res.status(200).json({
             success: true,
-            message: 'Tutor available slot deleted successfully',
+            message: 'Tutor weekly availability deleted successfully',
             data: result
         });
     } catch (err: any) {
@@ -209,8 +226,8 @@ const tutorController = {
     setTutorCategories,
     getTutorAllSession,
     updateBookingStatus,
-    createTutorAvailableSlot,
-    deleteTutorAvailableSlot,
+    createTutorWeeklyAvailability,
+    deleteTutorWeeklyAvailability,
     createTutorException
 }
 

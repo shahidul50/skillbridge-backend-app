@@ -74,7 +74,7 @@ model PlatformPaymentAccount {
 // --- Reviews ---
 
 model Review {
-    id             String   @id @default(cuid())
+    id             String   @id @default(uuid())
     bookingId      String   @unique
     studentId      String //betterAuth user reference
     user           User     @relation(fields: [studentId], references: [id], onDelete: Cascade)

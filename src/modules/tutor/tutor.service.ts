@@ -217,13 +217,66 @@ const updateBookingStatus = async () => {
 }
 
 //Create weekly availability slot.
-const createTutorAvailableSlot = async () => {
-    console.log("Create Tutor Available Slot Function from tutor.service.ts")
+const createTutorWeeklyAvailability = async (tutorProfileId: string, payload: any) => {
+    const { dayOfWeek, startTime, endTime } = payload;
+
+    // Check for overlapping time slots for the same day
+    const isOverlapping = await prisma.tutorWeeklyAvailability.findFirst({
+        where: {
+            tutorProfileId,
+            dayOfWeek,
+            OR: [
+                {
+                    AND: [
+                        { startTime: { lte: startTime } },
+                        { endTime: { gt: startTime } }
+                    ]
+                },
+                {
+                    AND: [
+                        { startTime: { lt: endTime } },
+                        { endTime: { gte: endTime } }
+                    ]
+                }
+            ]
+        }
+    });
+
+    if (isOverlapping) {
+        throw new AppError("This time slot overlaps with an existing schedule", 400, "OVERLAP_ERROR");
+    }
+
+    // create a new weekly availability slot
+    return await prisma.tutorWeeklyAvailability.create({
+        data: {
+            tutorProfileId,
+            dayOfWeek,
+            startTime,
+            endTime,
+        }
+    });
 }
 
 //delete weekly availability slot.
-const deleteTutorAvailableSlot = async () => {
-    console.log("Delete Tutor Available Slot Function from tutor.service.ts")
+const deleteTutorWeeklyAvailability = async (tutorProfileId: string, slotId: string) => {
+    // check if the slot exists 
+    const slot = await prisma.tutorWeeklyAvailability.findUnique({
+        where: { id: slotId }
+    });
+
+    if (!slot) {
+        throw new AppError("Time slot not found", 404, "NOT_FOUND");
+    }
+
+    // check if the slot belongs to the tutor
+    if (slot.tutorProfileId !== tutorProfileId) {
+        throw new AppError("You are not authorized to delete this slot", 403, "FORBIDDEN");
+    }
+
+    //if all checks pass then delete the slot
+    return await prisma.tutorWeeklyAvailability.delete({
+        where: { id: slotId }
+    });
 }
 
 //create exception on a special day.
@@ -262,8 +315,8 @@ const tutorService = {
     setTutorCategories,
     getTutorAllSession,
     updateBookingStatus,
-    createTutorAvailableSlot,
-    deleteTutorAvailableSlot,
+    createTutorWeeklyAvailability,
+    deleteTutorWeeklyAvailability,
     createTutorException,
     getTutorProfileByUserId
 }

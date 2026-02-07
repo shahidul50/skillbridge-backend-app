@@ -63,7 +63,7 @@ model TutorAvailabilityException {
 }
 
 model AvailabilitySlot {
-    id             String       @id @default(cuid())
+    id             String       @id @default(uuid())
     tutorProfileId String
     tutorProfile   TutorProfile @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
     date           DateTime
