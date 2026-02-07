@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
+import { addDays, differenceInCalendarDays, format, isBefore, isSameDay, startOfDay } from "date-fns";
 
 
 type UpdatableDataInput = {
@@ -306,7 +307,77 @@ const createTutorException = async (tutorProfileId: string, payload: any) => {
     });
 }
 
+//get available slots for a tutor based on weekly availability, exceptions and already booked slots.
+const getAvailableSlots = async (tutorProfileId: string, startDateStr?: string) => {
+    const now = new Date();
+    const today = startOfDay(now);
+    const currentTime = format(now, "HH:mm"); // Current Time with (HH:mm) Format (egg. "19:00")
 
+    let startFrom = startDateStr ? startOfDay(new Date(startDateStr)) : today;
+
+    // Date Validation: Check if the date is in the past
+    if (isBefore(startFrom, today)) {
+        throw new AppError("Cannot fetch slots for past dates", 400, "INVALID_DATE");
+    }
+
+    const daysDifference = differenceInCalendarDays(startFrom, today);
+    if (daysDifference > 4) {
+        throw new AppError("You can only fetch slots within 4 days from today", 400, "DATE_OUT_OF_RANGE");
+    }
+
+    const daysToGenerate = 3;
+    const availableSlots = [];
+
+
+    // get tutor Weekly Availability and Exceptions in one time 
+    const [weeklySchedules, exceptions, bookedSlots] = await Promise.all([
+        prisma.tutorWeeklyAvailability.findMany({ where: { tutorProfileId, isActive: true } }),
+        prisma.tutorAvailabilityException.findMany({ where: { tutorProfileId } }),
+        prisma.availabilitySlot.findMany({
+            where: { tutorProfileId, date: { gte: startFrom }, isBooked: true }
+        })
+    ]);
+
+    for (let i = 0; i < daysToGenerate; i++) {
+        const currentDate = addDays(startFrom, i);
+        const dateString = format(currentDate, "yyyy-MM-dd");
+        const dayName = format(currentDate, "EEEE");
+
+        // Check if the day is an exception (Off-day)
+        const isExceptionDay = exceptions.some(ex => format(new Date(ex.date), "yyyy-MM-dd") === dateString);
+        if (isExceptionDay) continue;
+
+        const daySchedules = weeklySchedules.filter(ws => ws.dayOfWeek === dayName);
+
+        for (const schedule of daySchedules) {
+            // Check if the slot is in the past for the current day
+            if (isSameDay(currentDate, now)) {
+                if (schedule.startTime <= currentTime) {
+                    continue; // Remove past time slots for the current day
+                }
+            }
+
+            // filter out already booked slots
+            const isAlreadyBooked = bookedSlots.some(bs =>
+                format(new Date(bs.date), "yyyy-MM-dd") === dateString &&
+                bs.startTime === schedule.startTime &&
+                bs.endTime === schedule.endTime
+            );
+
+            if (!isAlreadyBooked) {
+                availableSlots.push({
+                    tutorProfileId,
+                    date: dateString,
+                    day: dayName,
+                    startTime: schedule.startTime,
+                    endTime: schedule.endTime
+                });
+            }
+        }
+    }
+
+    return availableSlots;
+}
 
 const tutorService = {
     getAllTutors,
@@ -318,7 +389,8 @@ const tutorService = {
     createTutorWeeklyAvailability,
     deleteTutorWeeklyAvailability,
     createTutorException,
-    getTutorProfileByUserId
+    getTutorProfileByUserId,
+    getAvailableSlots
 }
 
 

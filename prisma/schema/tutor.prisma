@@ -69,7 +69,7 @@ model AvailabilitySlot {
     date           DateTime
     startTime      String
     endTime        String
-    isBooked       Boolean      @default(false)
+    isBooked       Boolean      @default(true)
     createdAt      DateTime     @default(now())
     booking        Booking?
 

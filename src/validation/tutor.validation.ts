@@ -67,3 +67,11 @@ export const deleteWeeklyAvailabilitySchema = z.object({
         id: z.uuid("Invalid Slot ID format"),
     }),
 });
+
+// Validation schema for getting available slots
+export const getAvailableSlotsSchema = z.object({
+    query: z.object({
+        tutorProfileId: z.uuid("Invalid Tutor ID"),
+        startDate: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid Date").optional(),
+    }),
+});

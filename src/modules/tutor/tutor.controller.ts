@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import tutorService from "./tutor.service";
 import fs from "fs/promises";
 import { AppError } from "../../utils/AppError";
-import { createTutorExceptionSchema, createWeeklyAvailabilitySchema, deleteWeeklyAvailabilitySchema, setTutorCategoriesSchema, tutorQuerySchema, updateTutorSchema } from "../../validation/tutor.validation";
+import { createTutorExceptionSchema, createWeeklyAvailabilitySchema, deleteWeeklyAvailabilitySchema, getAvailableSlotsSchema, setTutorCategoriesSchema, tutorQuerySchema, updateTutorSchema } from "../../validation/tutor.validation";
 import cloudinary from "../../lib/cloudinary";
 
 //get all tutors with pagination, search and filtering.
@@ -26,7 +26,8 @@ const getAllTutors = async (req: Request, res: Response, next: NextFunction) => 
 //get all tutor by id with tutor profile, review, availability.
 const getTutorById = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        // const result = await tutorService.getTutorById();
+        // req.body = { tutorProfileId: req.params.id, startDate: new Date("2026-02-11").toISOString() };
+        // const result = await getAvailableSlots(req, res, next);
         // res.status(200).json({
         //     success: true,
         //     message: 'Tutor fetched successfully',
@@ -219,6 +220,33 @@ const createTutorException = async (req: Request, res: Response, next: NextFunct
     }
 }
 
+
+const getAvailableSlots = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const validatedQuery = getAvailableSlotsSchema.safeParse({ query: req.body });
+        if (!validatedQuery.success) throw validatedQuery.error;
+
+        const { tutorProfileId, startDate } = validatedQuery.data.query;
+
+        const result = await tutorService.getAvailableSlots(tutorProfileId, startDate);
+        if (result.length === 0) {
+            res.status(200).json({
+                success: true,
+                message: 'No available slots found',
+                data: result
+            });
+        } else {
+            res.status(200).json({
+                success: true,
+                message: 'Available slots fetched successfully',
+                data: result
+            });
+        }
+    } catch (err: any) {
+        next(err);
+    }
+}
+
 const tutorController = {
     getAllTutors,
     getTutorById,
@@ -228,7 +256,8 @@ const tutorController = {
     updateBookingStatus,
     createTutorWeeklyAvailability,
     deleteTutorWeeklyAvailability,
-    createTutorException
+    createTutorException,
+    getAvailableSlots
 }
 
 export default tutorController;

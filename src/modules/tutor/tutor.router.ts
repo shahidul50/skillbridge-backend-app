@@ -11,6 +11,9 @@ router.get('/', tutorController.getAllTutors);
 //  /sessions route for getting all teaching sessions by tutor
 router.get('/sessions', tutorController.getTutorAllSession);
 
+//  /available-slot route for getting available slots
+router.get('/available-slot', tutorController.getAvailableSlots);
+
 //  /:id route for getting tutor by id
 router.get('/:id', tutorController.getTutorById);
 
