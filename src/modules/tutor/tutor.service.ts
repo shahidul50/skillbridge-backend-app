@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
 
 
 type UpdatableDataInput = {
@@ -226,8 +227,30 @@ const deleteTutorAvailableSlot = async () => {
 }
 
 //create exception on a special day.
-const createTutorException = async () => {
-    console.log("Create Tutor Exception Function from tutor.service.ts")
+const createTutorException = async (tutorProfileId: string, payload: any) => {
+    const exceptionDate = new Date(payload.date);
+    console.log(exceptionDate)
+
+    // check if an exception already exists for the given date
+    const existingException = await prisma.tutorAvailabilityException.findFirst({
+        where: {
+            tutorProfileId,
+            date: exceptionDate
+        }
+    });
+
+    if (existingException) {
+        throw new AppError("An exception already exists for this date", 400, "DUPLICATE_ERROR");
+    }
+
+    // create a new exception
+    return await prisma.tutorAvailabilityException.create({
+        data: {
+            tutorProfileId,
+            date: exceptionDate,
+            reason: payload.reason,
+        },
+    });
 }
 
 

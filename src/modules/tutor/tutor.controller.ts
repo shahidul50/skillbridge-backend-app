@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import tutorService from "./tutor.service";
 import fs from "fs/promises";
 import { AppError } from "../../utils/AppError";
-import { setTutorCategoriesSchema, tutorQuerySchema, updateTutorSchema } from "../../validation/tutor.validation";
+import { createTutorExceptionSchema, setTutorCategoriesSchema, tutorQuerySchema, updateTutorSchema } from "../../validation/tutor.validation";
 import cloudinary from "../../lib/cloudinary";
 
 //get all tutors with pagination, search and filtering.
@@ -104,18 +104,17 @@ const updateTutorProfile = async (req: Request, res: Response, next: NextFunctio
 const setTutorCategories = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const tutorId = req.user?.id;
-        console.log(req.body)
 
         const tutorProfile = await tutorService.getTutorProfileByUserId(tutorId!);
         if (!tutorProfile) throw new AppError("Tutor profile not found", 404, "NOT_FOUND");
 
-        // ২. Zod validation
+        // Zod validation
         const validation = setTutorCategoriesSchema.safeParse({ body: req.body });
         // if (!validation.success) throw new AppError("Validation failed", 400, validation.error.message);
         if (!validation.success) throw validation.error;
 
         const result = await tutorService.setTutorCategories(tutorProfile.id, validation.data.body.categoryId);
-        res.status(200).json({
+        res.status(201).json({
             success: true,
             message: 'Tutor categories set successfully',
             data: result
@@ -184,10 +183,18 @@ const deleteTutorAvailableSlot = async (req: Request, res: Response, next: NextF
 //create exception on a special day.
 const createTutorException = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const result = await tutorService.createTutorException();
-        res.status(200).json({
+        const tutorId = req.user?.id;
+
+        const tutorProfile = await tutorService.getTutorProfileByUserId(tutorId!);
+        if (!tutorProfile) throw new AppError("Tutor profile not found", 404, "NOT_FOUND");
+
+        const validation = createTutorExceptionSchema.safeParse({ body: req.body });
+        if (!validation.success) throw validation.error;
+
+        const result = await tutorService.createTutorException(tutorProfile.id, validation.data.body);
+        res.status(201).json({
             success: true,
-            message: 'Tutor exception created successfully',
+            message: 'Tutor exception (Off-day) created successfully',
             data: result
         });
     } catch (err: any) {

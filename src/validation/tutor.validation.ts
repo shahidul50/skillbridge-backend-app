@@ -30,3 +30,14 @@ export const setTutorCategoriesSchema = z.object({
         categoryId: z.array(z.string().uuid("Invalid Category ID")).min(1, "At least one category is required"),
     }),
 });
+
+
+export const createTutorExceptionSchema = z.object({
+    body: z.object({
+        // ISO Date format (e.g., "2026-02-15")
+        date: z.string().refine((val) => !isNaN(Date.parse(val)), {
+            message: "Invalid date format. Use YYYY-MM-DD",
+        }),
+        reason: z.string().min(5, "Reason must be at least 5 characters long").optional(),
+    }),
+});

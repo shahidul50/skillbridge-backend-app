@@ -20,7 +20,7 @@ router.post('/add-categories', auth(UserRole.TUTOR), tutorController.setTutorCat
 router.post('/available-slot', tutorController.createTutorAvailableSlot);
 
 //  /exception route for creating exception on a special day
-router.post('/exception', tutorController.createTutorException);
+router.post('/exception', auth(UserRole.TUTOR), tutorController.createTutorException);
 
 //  /session/:bookingId route for updating session status to 'COMPLETED'
 router.patch('/sessions/:bookingId', tutorController.updateBookingStatus);
