@@ -282,10 +282,15 @@ const deleteTutorWeeklyAvailability = async (tutorProfileId: string, slotId: str
 
 //create exception on a special day.
 const createTutorException = async (tutorProfileId: string, payload: any) => {
-    const exceptionDate = new Date(payload.date);
-    console.log(exceptionDate)
+    const today = startOfDay(new Date());
+    const exceptionDate = startOfDay(new Date(payload.date));
 
-    // check if an exception already exists for the given date
+    // check created exception date is not in the past
+    if (isBefore(exceptionDate, today)) {
+        throw new AppError("Cannot create exception for past dates", 400, "INVALID_DATE");
+    }
+
+    // check if an exception already exists for the same date (Duplicate Check)
     const existingException = await prisma.tutorAvailabilityException.findFirst({
         where: {
             tutorProfileId,
@@ -297,7 +302,24 @@ const createTutorException = async (tutorProfileId: string, payload: any) => {
         throw new AppError("An exception already exists for this date", 400, "DUPLICATE_ERROR");
     }
 
-    // create a new exception
+    // check if there is any booked slot on the exception date. If there is a booked slot then do not allow tutor to create exception for that date.
+    const hasBookedSlot = await prisma.availabilitySlot.findFirst({
+        where: {
+            tutorProfileId,
+            date: exceptionDate,
+            isBooked: true
+        }
+    });
+
+    if (hasBookedSlot) {
+        throw new AppError(
+            "Cannot create exception. You already have a booked slot on this date.",
+            400,
+            "BOOKING_EXISTS"
+        );
+    }
+
+    // if all checks pass then create exception (Off-day) for the tutor
     return await prisma.tutorAvailabilityException.create({
         data: {
             tutorProfileId,

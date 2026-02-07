@@ -12,7 +12,7 @@ router.get('/', tutorController.getAllTutors);
 router.get('/sessions', tutorController.getTutorAllSession);
 
 //  /available-slot route for getting available slots
-router.get('/available-slot', tutorController.getAvailableSlots);
+router.get('/available-slots', tutorController.getAvailableSlots);
 
 //  /:id route for getting tutor by id
 router.get('/:id', tutorController.getTutorById);
