@@ -160,8 +160,52 @@ const createBooking = async (studentId: string, payload: any) => {
 }
 
 // Update booking status as ’CANCELLED’ of your own bookings.
-const updateBookingStatus = async () => {
-    console.log("Update Booking Status Function from booking.service.ts")
+const updateBookingStatus = async (studentId: string, bookingId: string) => {
+    //find booking information by bookingId
+    const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: { payment: true }
+    });
+
+    if (!booking) {
+        throw new AppError("Booking not found", 404, "NOT_FOUND");
+    }
+
+    // Ownership check (whether the booking belongs to this student)
+    if (booking.studentId !== studentId) {
+        throw new AppError("You are not authorized to cancel this booking", 403, "FORBIDDEN");
+    }
+
+    // check booking status already 'CANCELLED' or not 
+    if (booking.status === "CANCELLED") {
+        throw new AppError("This booking was canceled already.", 400, "ALREADY_CANCELLED");
+    }
+
+    //Business logic check (if the Admin has confirmed, or if the payment status is PENDING/SUCCESS, then cancellation is not allowed)
+    if (booking.status === "CONFIRMED") {
+        throw new AppError("Cannot cancel a confirmed booking. Please contact support.", 400, "ALREADY_CONFIRMED");
+    }
+
+    if (booking.payment && (booking.payment.status === "SUCCESS" || booking.payment.status === "PENDING")) {
+        throw new AppError("Cannot cancel booking because payment is already submitted or verified.", 400, "PAYMENT_EXISTS");
+    }
+
+    // booking cancellation and slot release
+    return await prisma.$transaction(async (tx) => {
+        // booking status update
+        const cancelledBooking = await tx.booking.update({
+            where: { id: bookingId },
+            data: { status: "CANCELLED" }
+        });
+
+        // Make the associated slot available (Free) again.
+        await tx.availabilitySlot.update({
+            where: { id: booking.availabilitySlotId },
+            data: { isBooked: false }
+        });
+
+        return cancelledBooking;
+    });
 }
 
 const bookingService = {

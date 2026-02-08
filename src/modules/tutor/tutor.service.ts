@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
-import { addDays, differenceInCalendarDays, format, isBefore, isSameDay, startOfDay } from "date-fns";
+import { addDays, differenceInCalendarDays, differenceInMinutes, format, isBefore, isSameDay, parse, startOfDay } from "date-fns";
 
 
 type UpdatableDataInput = {
@@ -220,6 +220,21 @@ const updateBookingStatus = async () => {
 //Create weekly availability slot.
 const createTutorWeeklyAvailability = async (tutorProfileId: string, payload: any) => {
     const { dayOfWeek, startTime, endTime } = payload;
+
+    // check the time difference (it must be at least 1 hour)
+    const referenceDate = new Date();
+    const start = parse(startTime, "HH:mm", referenceDate);
+    const end = parse(endTime, "HH:mm", referenceDate);
+
+    const diffInMinutes = differenceInMinutes(end, start);
+
+    if (diffInMinutes < 60) {
+        throw new AppError(
+            "The duration of the slot must be at least 1 hour.",
+            400,
+            "INVALID_DURATION"
+        );
+    }
 
     // Check for overlapping time slots for the same day
     const isOverlapping = await prisma.tutorWeeklyAvailability.findFirst({

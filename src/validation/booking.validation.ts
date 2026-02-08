@@ -17,3 +17,10 @@ export const bookingQuerySchema = z.object({
         status: z.enum(["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED"]).optional(),
     }),
 });
+
+
+export const cancelBookingSchema = z.object({
+    params: z.object({
+        id: z.uuid("Invalid Booking ID format"),
+    }),
+});

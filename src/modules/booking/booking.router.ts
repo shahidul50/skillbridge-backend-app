@@ -11,7 +11,7 @@ router.get('/', auth(UserRole.STUDENT), bookingController.getAllBookingByAuthor)
 router.post('/', auth(UserRole.STUDENT), bookingController.createBooking);
 
 //  /update-booking-status route for update booking status
-router.patch('/:id', bookingController.updateBookingStatus);
+router.patch('/:id', auth(UserRole.STUDENT), bookingController.updateBookingStatus);
 
 
 

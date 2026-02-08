@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import bookingService from "./booking.service";
-import { bookingQuerySchema, createBookingSchema } from "../../validation/booking.validation";
+import { bookingQuerySchema, cancelBookingSchema, createBookingSchema } from "../../validation/booking.validation";
 
 //get all tutors with pagination, search and filtering.
 const getAllBookingByAuthor = async (req: Request, res: Response, next: NextFunction) => {
@@ -12,11 +12,19 @@ const getAllBookingByAuthor = async (req: Request, res: Response, next: NextFunc
         if (!validation.success) throw validation.error;
 
         const result = await bookingService.getAllBookingByAuthor(studentId as string, validation.data.query);
-        res.status(200).json({
-            success: true,
-            message: 'Bookings fetched successfully',
-            data: result
-        });
+        if (result.data.length === 0) {
+            res.status(200).json({
+                success: true,
+                message: 'No booking found.'
+            });
+        } else {
+            res.status(200).json({
+                success: true,
+                message: 'Bookings fetched successfully',
+                data: result
+            });
+        }
+
     } catch (err: any) {
         next(err);
     }
@@ -46,10 +54,17 @@ const createBooking = async (req: Request, res: Response, next: NextFunction) =>
 // Update booking status as ’CANCELLED’ of your own bookings.
 const updateBookingStatus = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const result = await bookingService.updateBookingStatus();
+        const studentId = req.user?.id;
+
+        // zod validation check
+        const validation = cancelBookingSchema.safeParse({ params: req.params });
+        if (!validation.success) throw validation.error;
+
+        const result = await bookingService.updateBookingStatus(studentId as string,
+            validation.data.params.id);
         res.status(200).json({
             success: true,
-            message: 'Booking status updated successfully',
+            message: 'Booking cancel successfully.',
             data: result
         });
     } catch (err: any) {
