@@ -1,11 +1,17 @@
 import { NextFunction, Request, Response } from "express";
 import bookingService from "./booking.service";
-import { createBookingSchema } from "../../validation/booking.validation";
+import { bookingQuerySchema, createBookingSchema } from "../../validation/booking.validation";
 
 //get all tutors with pagination, search and filtering.
-const getAllBookingByAuthorId = async (req: Request, res: Response, next: NextFunction) => {
+const getAllBookingByAuthor = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const result = await bookingService.getAllBookingByAuthorId();
+        const studentId = req.user?.id;
+
+        // Zod validation
+        const validation = bookingQuerySchema.safeParse({ query: req.query });
+        if (!validation.success) throw validation.error;
+
+        const result = await bookingService.getAllBookingByAuthor(studentId as string, validation.data.query);
         res.status(200).json({
             success: true,
             message: 'Bookings fetched successfully',
@@ -52,7 +58,7 @@ const updateBookingStatus = async (req: Request, res: Response, next: NextFuncti
 }
 
 const bookingController = {
-    getAllBookingByAuthorId,
+    getAllBookingByAuthor,
     createBooking,
     updateBookingStatus
 }

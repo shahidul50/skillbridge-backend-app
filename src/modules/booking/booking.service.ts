@@ -1,26 +1,107 @@
-import { differenceInMinutes, parse } from "date-fns";
+import { differenceInMinutes, format, parse } from "date-fns";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
+import { Prisma } from "../../../generated/prisma/client";
 
 
 //Get all booking by author Id.
-const getAllBookingByAuthorId = async () => {
-    console.log("Get All Booking By Author Id Function from booking.service.ts")
+const getAllBookingByAuthor = async (studentId: string, query: any) => {
+    const { page, limit, sortBy, sortOrder, searchTerm, status } = query;
+
+    // pagination logic
+    const pageNumber = Number(page);
+    const limitNumber = Number(limit);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    // filter and searching condition
+    const andConditions: Prisma.BookingWhereInput[] = [{ studentId }];
+
+    // If there is a search term, it will check against the tutor’s name.
+    if (searchTerm) {
+        andConditions.push({
+            tutorProfile: {
+                user: {
+                    name: {
+                        contains: searchTerm,
+                        mode: 'insensitive',
+                    },
+                },
+            },
+        });
+    }
+
+    // filtering status if there is a status
+    if (status) {
+        andConditions.push({ status });
+    }
+
+    const whereConditions: Prisma.BookingWhereInput = { AND: andConditions };
+
+    const [result, total] = await Promise.all([
+        prisma.booking.findMany({
+            where: whereConditions,
+            skip,
+            take: limitNumber,
+            orderBy: { [sortBy]: sortOrder },
+            include: {
+                availabilitySlot: true,
+                tutorProfile: {
+                    include: {
+                        user: { select: { name: true, email: true, image: true } }
+                    }
+                },
+                payment: true
+            }
+        }),
+        prisma.booking.count({ where: whereConditions })
+    ]);
+
+    return {
+        data: result,
+        pagination: {
+            total,
+            page: pageNumber,
+            limit: limitNumber,
+            totalPages: Math.ceil(total / limitNumber),
+        }
+    };
 }
 
 //Create new booking
 const createBooking = async (studentId: string, payload: any) => {
     const { tutorProfileId, date, startTime, endTime } = payload;
     const bookingDate = new Date(date);
+    const dayOfWeek = format(bookingDate, "EEEE");
 
-    // find tutor to get hourly rate for price calculation
-    const tutor = await prisma.tutorProfile.findUnique({
+    // find tutor info, weekly schedule and exception
+    const tutorData = await prisma.tutorProfile.findUnique({
         where: { id: tutorProfileId },
-        select: { hourlyRate: true }
+        include: {
+            tutorWeeklyAvailabilities: {
+                where: { dayOfWeek, isActive: true }
+            },
+            tutorAvailabilityExceptions: {
+                where: { date: bookingDate }
+            }
+        }
     });
 
-    if (!tutor) {
+    if (!tutorData) {
         throw new AppError("Tutor not found", 404, "NOT_FOUND");
+    }
+
+    // Check whether this slot exists in the weekly schedule. (Crucial Security Check)
+    const isValidWeeklySlot = tutorData.tutorWeeklyAvailabilities.find(
+        (slot) => slot.startTime === startTime && slot.endTime === endTime
+    );
+
+    if (!isValidWeeklySlot) {
+        throw new AppError("The tutor is not available at this time according to their weekly schedule.", 400, "INVALID_SLOT");
+    }
+
+    // check tutor has any exception on selected date 
+    if (tutorData.tutorAvailabilityExceptions.length > 0) {
+        throw new AppError("The tutor has an exception/holiday on this specific date.", 400, "TUTOR_OFF_DAY");
     }
 
     // Dynamic price calculation logic
@@ -35,7 +116,7 @@ const createBooking = async (studentId: string, payload: any) => {
     }
 
     // Calculation (hourlyRate / 60) * total minute
-    const calculatedPrice = (tutor.hourlyRate / 60) * totalMinutes;
+    const calculatedPrice = (tutorData.hourlyRate / 60) * totalMinutes;
 
     // To make decimal numbers look neat (for example: turning 12.505 into 12.51),
     const finalPrice = parseFloat(calculatedPrice.toFixed(2));
@@ -84,7 +165,7 @@ const updateBookingStatus = async () => {
 }
 
 const bookingService = {
-    getAllBookingByAuthorId,
+    getAllBookingByAuthor,
     createBooking,
     updateBookingStatus
 }
