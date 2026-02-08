@@ -1,5 +1,6 @@
 import { Router } from "express";
 import bookingController from "./booking.controller";
+import auth, { UserRole } from "../../middleware/authMiddleware";
 
 const router = Router();
 
@@ -7,7 +8,7 @@ const router = Router();
 router.get('/author/:id', bookingController.getAllBookingByAuthorId);
 
 //  / route for create new booking
-router.post('/', bookingController.createBooking);
+router.post('/', auth(UserRole.STUDENT), bookingController.createBooking);
 
 //  /update-booking-status route for update booking status
 router.patch('/:id', bookingController.updateBookingStatus);
