@@ -72,7 +72,6 @@ model PlatformPaymentAccount {
 }
 
 // --- Reviews ---
-
 model Review {
     id             String   @id @default(uuid())
     bookingId      String   @unique

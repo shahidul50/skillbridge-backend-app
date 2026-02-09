@@ -9,6 +9,7 @@ import { tutorRouter } from './modules/tutor/tutor.router';
 import { bookingRouter } from './modules/booking/booking.router';
 import { reviewRouter } from './modules/review/review.router';
 import authRouter from './modules/auth/auth.router';
+import { paymentRouter } from './modules/payment/payment.router';
 const app: Application = express();
 
 app.use(express.json());
@@ -30,6 +31,7 @@ app.use('/api/v1/profile', authRouter);
 app.use('/api/v1/categories', categoryRouter);
 app.use('/api/v1/tutors', tutorRouter);
 app.use('/api/v1/bookings', bookingRouter);
+app.use('/api/v1/payments', paymentRouter);
 app.use('/api/v1/reviews', reviewRouter);
 
 app.use(NotFound);
