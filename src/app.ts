@@ -10,6 +10,7 @@ import { bookingRouter } from './modules/booking/booking.router';
 import { reviewRouter } from './modules/review/review.router';
 import authRouter from './modules/auth/auth.router';
 import { paymentRouter } from './modules/payment/payment.router';
+import adminRouter from './modules/admin/admin.router';
 const app: Application = express();
 
 app.use(express.json());
@@ -33,6 +34,7 @@ app.use('/api/v1/tutors', tutorRouter);
 app.use('/api/v1/bookings', bookingRouter);
 app.use('/api/v1/payments', paymentRouter);
 app.use('/api/v1/reviews', reviewRouter);
+app.use('/api/v1/admin', adminRouter);
 
 app.use(NotFound);
 app.use(errorHandler)

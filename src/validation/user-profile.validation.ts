@@ -6,3 +6,15 @@ export const updateUserProfileSchema = z.object({
         phoneNumber: z.string().min(11, "Invalid phone number").optional(),
     }),
 });
+
+export const userQuerySchema = z.object({
+    query: z.object({
+        page: z.string().optional().default("1"),
+        limit: z.string().optional().default("10"),
+        sortBy: z.string().optional().default("createdAt"),
+        sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
+        searchTerm: z.string().optional(),
+        role: z.string().optional().transform((val) => val?.toUpperCase()),
+        isActive: z.enum(["true", "false"]).optional(),
+    }),
+});

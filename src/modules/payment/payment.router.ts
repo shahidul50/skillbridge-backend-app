@@ -5,7 +5,7 @@ import auth, { UserRole } from "../../middleware/authMiddleware";
 const router = Router();
 
 //  /me route for getting user profile
-router.get('/account-details', paymentController.getAccountDetails)
+router.get('/account-details', auth(UserRole.STUDENT, UserRole.ADMIN), paymentController.getAccountDetails)
 
 router.post('/account-details', auth(UserRole.ADMIN), paymentController.createPaymentAccountDetails)
 

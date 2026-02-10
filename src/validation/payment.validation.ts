@@ -16,3 +16,15 @@ export const paymentAccountSchema = z.object({
             .max(15, "Account number is too long")
     }),
 });
+
+export const paymentAccountQuerySchema = z.object({
+    query: z.object({
+        page: z.string().optional().default("1"),
+        limit: z.string().optional().default("10"),
+        sortBy: z.string().optional().default("method"),
+        sortOrder: z.enum(["asc", "desc"]).optional().default("asc"),
+        searchTerm: z.string().optional(),
+        method: z.string().optional(), // BKASH, NAGAD etc.
+        isActive: z.enum(["true", "false"]).optional(),
+    }),
+});
