@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import adminService from "./admin.service";
 import { paymentAccountQuerySchema } from "../../validation/payment.validation";
-import { userQuerySchema } from "../../validation/user-profile.validation";
+import { bannedUserSchema, userQuerySchema } from "../../validation/user-profile.validation";
 
 
 const getAllPaymentAccount = async (req: Request, res: Response, next: NextFunction) => {
@@ -36,11 +36,32 @@ const getAllPlatformUser = async (req: Request, res: Response, next: NextFunctio
     }
 }
 
+const bannedUserAccount = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const adminId = req.user?.id;
+        //zod validation
+        const validation = bannedUserSchema.safeParse({ params: req.params, body: req.body });
+
+        if (!validation.success) throw validation.error;
+        const { id } = validation.data.params;
+        const { isActive } = validation.data.body;
+
+        const result = await adminService.bannedUserAccount(adminId as string, id, isActive);
+        res.status(200).json({
+            success: true,
+            message: `User ${isActive ? 'activated' : 'banned'} successfully.`,
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
 
 const adminController = {
     getAllPaymentAccount,
     getAllPlatformUser,
-    //bannedUserAccount,
+    bannedUserAccount,
     //getAllPaymentDetails,
     //verifyPaymentTransaction,
     //getStats,

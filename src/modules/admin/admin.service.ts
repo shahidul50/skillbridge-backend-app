@@ -1,6 +1,7 @@
 import { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../lib/prisma"
 import { UserRole } from "../../middleware/authMiddleware";
+import { AppError } from "../../utils/AppError";
 
 
 //get all platform account
@@ -86,9 +87,7 @@ const getAllPlatformUser = async (query: any) => {
 
     // isActive filtering
     if (isActive) {
-        andConditions.push({
-            isActive: isActive,
-        });
+        andConditions.push({ isActive: isActive === "true" });
     }
 
     //remove admin data 
@@ -132,8 +131,32 @@ const getAllPlatformUser = async (query: any) => {
 }
 
 //banned user when he/she break platform rules
-const bannedUserAccount = async () => {
-    console.log("Create Review Function from review.service.ts")
+const bannedUserAccount = async (adminId: string, targetUserId: string, status: boolean) => {
+    // check is admin banned his own account
+    if (adminId === targetUserId) {
+        throw new AppError("You cannot ban your own account!", 400, "SELF_BAN_ERROR");
+    }
+
+    // check user is exist or not
+    const user = await prisma.user.findUnique({
+        where: { id: targetUserId }
+    });
+
+    if (!user) {
+        throw new AppError("User not found", 404, "NOT_FOUND");
+    }
+
+    return await prisma.user.update({
+        where: { id: targetUserId },
+        data: { isActive: status },
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            isActive: true,
+            role: true
+        }
+    });
 }
 
 //Get all payment details 

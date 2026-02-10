@@ -18,3 +18,16 @@ export const userQuerySchema = z.object({
         isActive: z.enum(["true", "false"]).optional(),
     }),
 });
+
+export const bannedUserSchema = z.object({
+    params: z.object({
+        id: z.string({
+            error: "User ID is required",
+        }),
+    }),
+    body: z.object({
+        isActive: z.boolean({
+            error: "isActive status is required",
+        }),
+    }),
+});

@@ -10,6 +10,9 @@ router.get("/account-details", auth(UserRole.ADMIN), adminController.getAllPayme
 //  /account-details route for getting all platform user
 router.get("/users", auth(UserRole.ADMIN), adminController.getAllPlatformUser);
 
+//   /users/toggle-status/:id route for banned or activated user status
+router.patch("/users/toggle-status/:id", auth(UserRole.ADMIN), adminController.bannedUserAccount)
+
 
 const adminRouter: Router = router
 export default adminRouter;
