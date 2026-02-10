@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import adminService from "./admin.service";
-import { paymentAccountQuerySchema } from "../../validation/payment.validation";
+import { paymentAccountQuerySchema, paymentQuerySchema, verifyPaymentSchema } from "../../validation/payment.validation";
 import { bannedUserSchema, userQuerySchema } from "../../validation/user-profile.validation";
 
 
@@ -57,13 +57,49 @@ const bannedUserAccount = async (req: Request, res: Response, next: NextFunction
     }
 }
 
+const getAllPayments = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const validation = paymentQuerySchema.safeParse({ query: req.query });
+        if (!validation.success) throw validation.error;
+
+        const result = await adminService.getAllPayments(validation.data.query);
+        res.status(200).json({
+            success: true,
+            message: `Payment details fetched successfully.`,
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
+const verifyPaymentTransaction = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const validation = verifyPaymentSchema.safeParse({ params: req.params, body: req.body });
+        if (!validation.success) throw validation.error;
+
+        const { id } = validation.data.params;
+        const { status } = validation.data.body;
+
+        const result = await adminService.verifyPaymentTransaction(id, status);
+        res.status(200).json({
+            success: true,
+            message: `Payment marked as ${status.toLowerCase()} successfully.`,
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
+
 
 const adminController = {
     getAllPaymentAccount,
     getAllPlatformUser,
     bannedUserAccount,
-    //getAllPaymentDetails,
-    //verifyPaymentTransaction,
+    getAllPayments,
+    verifyPaymentTransaction,
     //getStats,
     //getAllBooking,
     //updateBookingStatus

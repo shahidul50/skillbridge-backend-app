@@ -28,3 +28,28 @@ export const paymentAccountQuerySchema = z.object({
         isActive: z.enum(["true", "false"]).optional(),
     }),
 });
+
+
+//for admin route get all payments
+export const paymentQuerySchema = z.object({
+    query: z.object({
+        page: z.string().optional().default("1"),
+        limit: z.string().optional().default("10"),
+        sortBy: z.string().optional().default("submittedAt"),
+        sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
+        searchTerm: z.string().optional(),
+        paymentMethod: z.string().optional().transform(val => val?.toUpperCase()),
+        status: z.enum(["PENDING", "SUCCESS", "FAILED", "CANCELLED"]).optional(),
+    }),
+});
+
+export const verifyPaymentSchema = z.object({
+    params: z.object({
+        id: z.string({ error: "Payment ID is required" }),
+    }),
+    body: z.object({
+        status: z.enum(["SUCCESS", "FAILED"], {
+            error: "Verification status (SUCCESS/FAILED) is required",
+        }),
+    }),
+});
