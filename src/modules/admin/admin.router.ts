@@ -13,6 +13,9 @@ router.get("/users", auth(UserRole.ADMIN), adminController.getAllPlatformUser);
 //  /payments route for getting all payment
 router.get('/payments', auth(UserRole.ADMIN), adminController.getAllPayments);
 
+//  /bookings route for getting all bookings
+router.get('/bookings', auth(UserRole.ADMIN), adminController.getAllBooking);
+
 //  /payments/verify/:id route for verify booking payment
 router.patch('/payments/verify/:id', auth(UserRole.ADMIN), adminController.verifyPaymentTransaction);
 

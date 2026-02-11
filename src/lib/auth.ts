@@ -1,19 +1,8 @@
 import { APIError, betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma";
-import nodemailer from "nodemailer";
 import { createAuthMiddleware } from "better-auth/api";
-
-
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false, // Use true for port 465, false for port 587
-  auth: {
-    user: process.env.APP_USER,
-    pass: process.env.APP_PASS,
-  },
-});
+import { sendEmail } from "../utils/emailSender";
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
@@ -119,13 +108,11 @@ export const auth = betterAuth({
     sendOnSignUp: false,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url, token }, request) => {
-      try {
-        const verificationUrl = `${process.env.APP_URL}/verify-email?token=${token}`;
-        const info = await transporter.sendMail({
-          from: '"SkillBridge" <skillbridge@gmail.com>',
-          to: user.email,
-          subject: "Please verify your email!",
-          html: `<!DOCTYPE html>
+      const verificationUrl = `${process.env.APP_URL}/verify-email?token=${token}`;
+      await sendEmail({
+        to: user.email,
+        subject: "Please verify your email!",
+        html: `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -254,14 +241,9 @@ export const auth = betterAuth({
   </div>
 </body>
 </html>
-`,
-        });
+        `,
+      });
 
-        console.log("Message sent:", info.messageId);
-      } catch (err) {
-        console.error(err);
-        throw err;
-      }
     },
   },
 

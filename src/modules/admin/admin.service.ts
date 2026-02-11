@@ -1,7 +1,9 @@
+import { format, parse } from "date-fns";
 import { PaymentMethod, Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../lib/prisma"
 import { UserRole } from "../../middleware/authMiddleware";
 import { AppError } from "../../utils/AppError";
+import { sendEmail } from "../../utils/emailSender";
 
 
 //get all platform account
@@ -238,7 +240,19 @@ const verifyPaymentTransaction = async (paymentId: string, status: "SUCCESS" | "
     // check payment exist or not
     const payment = await prisma.payment.findUnique({
         where: { id: paymentId },
-        include: { booking: true }
+        include: {
+            booking: {
+                include: {
+                    student: true,
+                    availabilitySlot: {
+                        include: {
+                            tutorProfile: { include: { user: true } }
+                        }
+                    }
+                }
+            },
+            user: true
+        }
     });
 
     if (!payment) {
@@ -250,7 +264,7 @@ const verifyPaymentTransaction = async (paymentId: string, status: "SUCCESS" | "
         throw new AppError("This payment has already been processed", 400);
     }
 
-    return await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
         // payment status update
         const updatedPayment = await tx.payment.update({
             where: { id: paymentId },
@@ -266,18 +280,62 @@ const verifyPaymentTransaction = async (paymentId: string, status: "SUCCESS" | "
                 where: { id: payment.bookingId },
                 data: { status: "CONFIRMED" }
             });
-        }
-
-        //if payment status is 'FAILED' then update booking status is 'PENDING'
-        else if (status === "FAILED") {
+        } else {
             await tx.booking.update({
                 where: { id: payment.bookingId },
-                data: { status: "PENDING" }
+                data: { status: "CANCELLED" }
+            });
+
+            await tx.availabilitySlot.update({
+                where: { id: payment.booking.availabilitySlotId },
+                data: { isBooked: false }
             });
         }
 
         return updatedPayment;
     });
+
+
+    // sending email tutor and student for confirmation
+    if (status === "SUCCESS") {
+        //student template
+        const studentHtml = `
+            <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+                <div style="background-color: #4CAF50; color: white; padding: 20px; text-align: center;">
+                    <h2>Payment Confirmed!</h2>
+                </div>
+                <div style="padding: 20px;">
+                    <p>Hi <strong>${payment.user.name}</strong>,</p>
+                    <p>Your payment for <strong>#${payment.transactionId}</strong> has been verified. Your session is now officially booked.</p>
+                    <div style="background: #f4f4f4; padding: 15px; border-radius: 5px;">
+                        <p><strong>Amount:</strong> ${payment.amount} BDT</p>
+                        <p><strong>Tutor:</strong> ${payment.booking.availabilitySlot.tutorProfile.user.name}</p>
+                    </div>
+                </div>
+            </div>`;
+
+        // tutor template
+        const tutorHtml = `
+            <div style="font-family: sans-serif; padding: 20px; border-left: 5px solid #4CAF50;">
+                <h2>New Class Confirmed!</h2>
+                <p>Hello ${payment.booking.availabilitySlot.tutorProfile.user.name},</p>
+                <p>Payment for student <strong>${payment.user.name}</strong> has been verified. Check your schedule.</p>
+            </div>`;
+
+
+        sendEmail({ to: payment.user.email, subject: "Payment Success", html: studentHtml }).catch(e => console.error("Email Error:", e));
+        sendEmail({ to: payment.booking.availabilitySlot.tutorProfile.user.email, subject: "New Booking", html: tutorHtml }).catch(e => console.error("Email Error:", e));
+    } else {
+        const failedHtml = `
+            <div style="font-family: sans-serif; padding: 20px; border: 1px solid #f44336;">
+                <h2 style="color: #f44336;">Payment Verification Failed</h2>
+                <p>Hi ${payment.user.name}, the transaction ID <strong>${payment.transactionId}</strong> you provided could not be verified.</p>
+                <p>Please try again or contact support.</p>
+            </div>`;
+        sendEmail({ to: payment.user.email, subject: "Payment Failed", html: failedHtml }).catch(e => console.error("Email Error:", e));
+    }
+
+    return result;
 }
 
 //Get total users, tutors and booking statistics.
@@ -286,19 +344,103 @@ const getStats = async () => {
 }
 
 //Get all booking
-const getAllBooking = async () => {
+const getAllBooking = async (query: any) => {
+    const { page, limit, sortBy, sortOrder, searchTerm, bookingStatus, paymentStatus } = query;
 
+    const pageNumber = Number(page);
+    const limitNumber = Number(limit);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const andConditions: Prisma.BookingWhereInput[] = [];
+
+    // remove those booking which status is 'CANCELLED'
+    andConditions.push({
+        status: {
+            not: 'CANCELLED'
+        }
+    });
+
+    // search logic: student name or tutor name
+    if (searchTerm) {
+        andConditions.push({
+            OR: [
+                {
+                    user: {
+                        name: { contains: searchTerm, mode: 'insensitive' }
+                    }
+                },
+                {
+                    tutorProfile: {
+                        user: { name: { contains: searchTerm, mode: 'insensitive' } }
+                    }
+                }
+            ]
+        });
+    }
+
+    // filtering logic
+    if (bookingStatus) andConditions.push({ status: bookingStatus });
+    if (paymentStatus) andConditions.push({ payment: { status: paymentStatus } });
+
+    const whereConditions: Prisma.BookingWhereInput =
+        andConditions.length > 0 ? { AND: andConditions } : {};
+
+    const [result, total] = await Promise.all([
+        prisma.booking.findMany({
+            where: whereConditions,
+            skip,
+            take: limitNumber,
+            orderBy: { [sortBy]: sortOrder },
+            select: {
+                id: true,
+                status: true,
+                price: true,
+                user: {
+                    select: { name: true }
+                },
+                tutorProfile: {
+                    select: {
+                        user: { select: { name: true } }
+                    }
+                },
+                payment: {
+                    select: { status: true, amount: true }
+                },
+                availabilitySlot: {
+                    select: {
+                        date: true,
+                        startTime: true,
+                        endTime: true
+                    }
+                }
+            }
+        }),
+        prisma.booking.count({ where: whereConditions }),
+    ]);
+
+
+    const formattedData = result.map(booking => ({
+        bookingId: booking.id,
+        studentName: booking.user?.name || "N/A",
+        tutorName: booking.tutorProfile?.user?.name || "N/A",
+        slotDate: format(booking.availabilitySlot?.date, 'dd-MM-yyyy'),
+        slotStartTime: format(parse(booking.availabilitySlot?.startTime, "HH:mm", new Date()), "hh:mm a"),
+        slotEndTime: format(parse(booking.availabilitySlot?.endTime, "HH:mm", new Date()), "hh:mm a"),
+        price: booking.price || 0,
+        bookingStatus: booking.status,
+        paymentStatus: booking.payment?.status || "PENDING"
+    }));
+
+    return {
+        data: formattedData,
+        pagination: {
+            total,
+            page: pageNumber,
+            limit: limitNumber,
+            totalPage: Math.ceil(total / limitNumber)
+        },
+    };
 }
-
-//update booking status as 'CONFIRMED'
-const updateBookingStatus = async () => {
-
-}
-
-
-
-
-
 
 
 const adminService = {
@@ -308,8 +450,7 @@ const adminService = {
     getAllPayments,
     verifyPaymentTransaction,
     getStats,
-    getAllBooking,
-    updateBookingStatus
+    getAllBooking
 }
 
 

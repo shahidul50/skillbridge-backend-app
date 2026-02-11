@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import adminService from "./admin.service";
 import { paymentAccountQuerySchema, paymentQuerySchema, verifyPaymentSchema } from "../../validation/payment.validation";
 import { bannedUserSchema, userQuerySchema } from "../../validation/user-profile.validation";
+import { adminBookingQuerySchema } from "../../validation/booking.validation";
 
 
 const getAllPaymentAccount = async (req: Request, res: Response, next: NextFunction) => {
@@ -92,6 +93,34 @@ const verifyPaymentTransaction = async (req: Request, res: Response, next: NextF
     }
 }
 
+const getAllBooking = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        //zod validation
+        const validation = adminBookingQuerySchema.safeParse({ query: req.query });
+        if (!validation.success) throw validation.error;
+        const result = await adminService.getAllBooking(validation.data.query);
+        res.status(200).json({
+            success: true,
+            message: `Booking fetched successfully.`,
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
+const getStats = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const result = await adminService.getStats();
+        res.status(200).json({
+            success: true,
+            message: `Get Stats successfully.`,
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
 
 
 const adminController = {
@@ -100,9 +129,8 @@ const adminController = {
     bannedUserAccount,
     getAllPayments,
     verifyPaymentTransaction,
-    //getStats,
-    //getAllBooking,
-    //updateBookingStatus
+    getStats,
+    getAllBooking
 }
 
 

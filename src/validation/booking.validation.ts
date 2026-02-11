@@ -24,3 +24,16 @@ export const cancelBookingSchema = z.object({
         id: z.uuid("Invalid Booking ID format"),
     }),
 });
+
+
+export const adminBookingQuerySchema = z.object({
+    query: z.object({
+        page: z.string().optional().default("1"),
+        limit: z.string().optional().default("10"),
+        sortBy: z.string().optional().default("createdAt"),
+        sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
+        searchTerm: z.string().optional(), // for searching student or tutor name
+        bookingStatus: z.enum(["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED"]).optional(),
+        paymentStatus: z.enum(["PENDING", "SUCCESS", "FAILED"]).optional(),
+    }),
+});
