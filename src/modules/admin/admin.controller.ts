@@ -114,7 +114,7 @@ const getStats = async (req: Request, res: Response, next: NextFunction) => {
         const result = await adminService.getStats();
         res.status(200).json({
             success: true,
-            message: `Get Stats successfully.`,
+            message: `Dashboard statistics fetched successfully.`,
             data: result
         });
     } catch (err: any) {

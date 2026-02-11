@@ -16,6 +16,9 @@ router.get('/payments', auth(UserRole.ADMIN), adminController.getAllPayments);
 //  /bookings route for getting all bookings
 router.get('/bookings', auth(UserRole.ADMIN), adminController.getAllBooking);
 
+//    /dashboard-stats  route for get dashboard statistics 
+router.get('/dashboard-stats', auth(UserRole.ADMIN), adminController.getStats);
+
 //  /payments/verify/:id route for verify booking payment
 router.patch('/payments/verify/:id', auth(UserRole.ADMIN), adminController.verifyPaymentTransaction);
 

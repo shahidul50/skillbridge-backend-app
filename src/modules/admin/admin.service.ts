@@ -338,9 +338,64 @@ const verifyPaymentTransaction = async (paymentId: string, status: "SUCCESS" | "
     return result;
 }
 
-//Get total users, tutors and booking statistics.
+//Get total users, tutors, booking, pendingBooking etc.
 const getStats = async () => {
+    const [
+        totalStudents,
+        totalTutors,
+        totalBookings,
+        totalPendingBookings,
+        totalCategories,
+        totalRevenue,
+        recentPayments
+    ] = await Promise.all([
 
+        // total student count
+        prisma.user.count({ where: { role: 'STUDENT' } }),
+
+        // total tutor count
+        prisma.tutorProfile.count(),
+
+        // total booking count without cancelled booking
+        prisma.booking.count({ where: { status: { not: 'CANCELLED' } } }),
+
+        // total pending booking
+        prisma.booking.count({ where: { status: 'PENDING' } }),
+
+        // total categories 
+        prisma.category.count(),
+
+        //total Revenue(summation of all success payment)
+        prisma.payment.aggregate({
+            where: { status: 'SUCCESS' },
+            _sum: { amount: true }
+        }),
+
+        // Recent 5 payments for activity tracking
+        prisma.payment.findMany({
+            take: 5,
+            orderBy: { submittedAt: 'desc' },
+            include: { user: { select: { name: true } } }
+        })
+    ]);
+
+    return {
+        overview: {
+            totalStudents,
+            totalTutors,
+            totalBookings,
+            totalPendingBookings,
+            totalCategories,
+            totalRevenue: totalRevenue._sum.amount || 0,
+        },
+        recentActivity: recentPayments.map(p => ({
+            id: p.id,
+            userName: p.user.name,
+            amount: p.amount,
+            status: p.status,
+            time: format(new Date(p.submittedAt), "dd MMM yyyy, hh:mm a")
+        }))
+    };
 }
 
 //Get all booking
