@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import tutorService from "./tutor.service";
 import fs from "fs/promises";
 import { AppError } from "../../utils/AppError";
-import { createTutorExceptionSchema, createWeeklyAvailabilitySchema, deleteWeeklyAvailabilitySchema, getAvailableSlotsSchema, setTutorCategoriesSchema, tutorQuerySchema, updateTutorSchema } from "../../validation/tutor.validation";
+import { createTutorExceptionSchema, createWeeklyAvailabilitySchema, deleteWeeklyAvailabilitySchema, getAvailableSlotsSchema, setTutorCategoriesSchema, tutorQuerySchema, tutorSessionQuerySchema, updateBookingStatusByTutorSchema, updateTutorSchema } from "../../validation/tutor.validation";
 import cloudinary from "../../lib/cloudinary";
 
 //get all tutors with pagination, search and filtering.
@@ -128,7 +128,16 @@ const setTutorCategories = async (req: Request, res: Response, next: NextFunctio
 //Get All teaching sessions by tutor.
 const getTutorAllSession = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const result = await tutorService.getTutorAllSession();
+        const tutorId = req.user?.id;
+        if (!tutorId) {
+            return res.status(403).json({ success: false, message: "Tutor not found" });
+        }
+        const tutorProfile = await tutorService.getTutorProfileByUserId(tutorId as string)
+
+        // zod validation
+        const validation = tutorSessionQuerySchema.safeParse({ query: req.query });
+        if (!validation.success) throw validation.error;
+        const result = await tutorService.getTutorAllSession(tutorProfile?.id as string, validation.data.query);
         res.status(200).json({
             success: true,
             message: 'Tutor session fetched successfully',
@@ -142,10 +151,20 @@ const getTutorAllSession = async (req: Request, res: Response, next: NextFunctio
 //Mark the session as 'COMPLETED' when it is complete.
 const updateBookingStatus = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const result = await tutorService.updateBookingStatus();
+        const tutorId = req.user?.id;
+        if (!tutorId) {
+            return res.status(403).json({ success: false, message: "Tutor not found" });
+        }
+        const tutorProfile = await tutorService.getTutorProfileByUserId(tutorId as string)
+
+        // zod validation
+        const validation = updateBookingStatusByTutorSchema.safeParse({ params: req.params });
+        if (!validation.success) throw validation.error;
+
+        const result = await tutorService.updateBookingStatus(tutorProfile?.id as string, validation.data.params.bookingId);
         res.status(200).json({
             success: true,
-            message: 'Session status updated successfully',
+            message: 'Session marked as completed successfully',
             data: result
         });
     } catch (err: any) {
@@ -220,7 +239,7 @@ const createTutorException = async (req: Request, res: Response, next: NextFunct
     }
 }
 
-
+//get available slots for a tutor based on weekly availability, exceptions and already booked slots.
 const getAvailableSlots = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const validatedQuery = getAvailableSlotsSchema.safeParse({ query: req.body });

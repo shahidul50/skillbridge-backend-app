@@ -9,7 +9,7 @@ const router = Router();
 router.get('/', tutorController.getAllTutors);
 
 //  /sessions route for getting all teaching sessions by tutor
-router.get('/sessions', tutorController.getTutorAllSession);
+router.get('/sessions', auth(UserRole.TUTOR), tutorController.getTutorAllSession);
 
 //  /available-slot route for getting available slots
 router.get('/available-slots', tutorController.getAvailableSlots);
@@ -29,7 +29,7 @@ router.post('/weekly-available', auth(UserRole.TUTOR), tutorController.createTut
 router.post('/exception', auth(UserRole.TUTOR), tutorController.createTutorException);
 
 //  /session/:bookingId route for updating session status to 'COMPLETED'
-router.patch('/sessions/:bookingId', tutorController.updateBookingStatus);
+router.patch('/sessions/:bookingId', auth(UserRole.TUTOR), tutorController.updateBookingStatus);
 
 //  / route for updating tutor information
 router.put('/', auth(UserRole.TUTOR), uploadHandler.single('avatar'), tutorController.updateTutorProfile);

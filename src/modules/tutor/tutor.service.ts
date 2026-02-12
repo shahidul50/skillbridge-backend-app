@@ -1,6 +1,7 @@
+import { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
-import { addDays, differenceInCalendarDays, differenceInMinutes, format, isBefore, isSameDay, parse, startOfDay } from "date-fns";
+import { addDays, differenceInCalendarDays, differenceInMinutes, format, isAfter, isBefore, isSameDay, parse, startOfDay } from "date-fns";
 
 
 type UpdatableDataInput = {
@@ -174,6 +175,7 @@ const updateTutorProfile = async (loggedTutorId: string, updatableData: Updatabl
     });
 }
 
+//get tutor profile by user Id
 const getTutorProfileByUserId = async (userId: string) => {
     return await prisma.tutorProfile.findUnique({
         where: { userId },
@@ -208,13 +210,134 @@ const setTutorCategories = async (tutorProfileId: string, categoryIds: string[])
 }
 
 //Get All teaching sessions by tutor.
-const getTutorAllSession = async () => {
-    console.log("Get Tutor All Session Function from tutor.service.ts")
+const getTutorAllSession = async (tutorProfileId: string, query: any) => {
+    const { page, limit, sortBy, sortOrder, searchTerm, status, availabilitySlotDate } = query;
+
+    const pageNumber = Number(page);
+    const limitNumber = Number(limit);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const andConditions: Prisma.BookingWhereInput[] = [
+        { tutorProfileId: tutorProfileId }
+    ];
+
+    if (!status) {
+        andConditions.push({
+            status: { not: 'CANCELLED' }
+        });
+    }
+
+    // search logic (Student Name)
+    if (searchTerm) {
+        andConditions.push({
+            user: { // student user relation
+                name: { contains: searchTerm, mode: 'insensitive' }
+            }
+        });
+    }
+
+    // status filtering
+    if (status) {
+        andConditions.push({ status });
+    }
+
+    // date filtering(Availability Slot Date)
+    if (availabilitySlotDate) {
+        andConditions.push({
+            availabilitySlot: {
+                date: new Date(availabilitySlotDate)
+            }
+        });
+    }
+
+    const whereConditions: Prisma.BookingWhereInput = { AND: andConditions };
+
+
+    const [result, total] = await Promise.all([
+        prisma.booking.findMany({
+            where: whereConditions,
+            skip,
+            take: limitNumber,
+            orderBy: { [sortBy]: sortOrder },
+            include: {
+                user: { select: { name: true, email: true, image: true } }, // student info
+                availabilitySlot: true,
+                payment: { select: { status: true, amount: true } }
+            }
+        }),
+        prisma.booking.count({ where: whereConditions }),
+    ]);
+
+    const formattedData = result.map(booking => ({
+        bookingId: booking.id,
+        studentName: booking.user?.name || "N/A",
+        studentEmail: booking.user?.email,
+        date: booking.availabilitySlot ? format(booking.availabilitySlot.date, 'dd-MM-yyyy') : "N/A",
+        time: booking.availabilitySlot
+            ? `${format(parse(booking.availabilitySlot.startTime, "HH:mm", new Date()), "hh:mm a")} - ${format(parse(booking.availabilitySlot.endTime, "HH:mm", new Date()), "hh:mm a")}`
+            : "N/A",
+        status: booking.status,
+        paymentStatus: booking.payment?.status || "PENDING",
+        amount: booking.payment?.amount || 0
+    }));
+
+    return {
+        data: formattedData,
+        pagination: {
+            page: pageNumber,
+            limit: limitNumber,
+            total,
+            totalPage: Math.ceil(total / limitNumber)
+        },
+    };
 }
 
 //Update booking status as 'COMPLETED' when it is complete by own session.
-const updateBookingStatus = async () => {
-    console.log("Update Booking Status Function from tutor.service.ts")
+const updateBookingStatus = async (tutorProfileId: string, bookingId: string) => {
+    // find booking data with booking slot by bookingId
+    const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: { availabilitySlot: true }
+    });
+
+    if (!booking) {
+        throw new AppError("Booking not found", 404);
+    }
+
+    // checking ownership for updating status
+    if (booking.tutorProfileId !== tutorProfileId) {
+        throw new AppError("You are not authorized to update this booking", 403);
+    }
+
+    // check booking status already 'COMPLETED' or not 
+    if (booking.status === "COMPLETED") {
+        throw new AppError("This session has already been marked as completed.", 400);
+    }
+
+    // check booking status is confirmed or not. we can update only confirmed booking status.
+    if (booking.status !== "CONFIRMED") {
+        throw new AppError(`Cannot complete a booking that is currently ${booking.status}`, 400);
+    }
+
+    // Time Comparison Logic
+    const now = new Date();
+    const slotDate = format(booking.availabilitySlot.date, "yyyy-MM-dd");
+    const sessionEndDateTime = parse(
+        `${slotDate} ${booking.availabilitySlot.endTime}`,
+        "yyyy-MM-dd HH:mm",
+        new Date()
+    );
+
+    // check if session was not completed, then we can't update status.
+    if (!isAfter(now, sessionEndDateTime)) {
+        throw new AppError("Session time has not ended yet. You cannot mark it as completed before the end time.", 400);
+    }
+
+
+    return await prisma.booking.update({
+        where: { id: bookingId },
+        data: { status: "COMPLETED" }
+    });
 }
 
 //Create weekly availability slot.

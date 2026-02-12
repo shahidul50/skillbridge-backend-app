@@ -75,3 +75,24 @@ export const getAvailableSlotsSchema = z.object({
         startDate: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid Date").optional(),
     }),
 });
+
+//validation schema for getting tutor sessions
+export const tutorSessionQuerySchema = z.object({
+    query: z.object({
+        page: z.string().optional().default("1"),
+        limit: z.string().optional().default("10"),
+        sortBy: z.string().optional().default("createdAt"),
+        sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
+        searchTerm: z.string().optional(), // student name searching
+        status: z.enum(["CONFIRMED", "COMPLETED"]).optional(),
+        availabilitySlotDate: z.string().optional(), // YYYY-MM-DD format
+    }),
+});
+
+
+//validation schema for updating booking status marked as 'COMPLETED'
+export const updateBookingStatusByTutorSchema = z.object({
+    params: z.object({
+        bookingId: z.string({ error: "Booking ID is required in query params" })
+    })
+});
