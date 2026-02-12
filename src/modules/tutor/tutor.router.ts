@@ -15,15 +15,13 @@ router.get('/sessions', auth(UserRole.TUTOR), tutorController.getTutorAllSession
 router.get('/available-slots', tutorController.getAvailableSlots);
 
 //  /:id route for getting tutor by id
-router.get('/:id', tutorController.getTutorById);
+router.get('/:id', tutorController.getTutorProfileById);
 
+//  /add-categories route for creating tutors categories
 router.post('/add-categories', auth(UserRole.TUTOR), tutorController.setTutorCategories);
 
 //  /weekly-available route for creating weekly availability slot
 router.post('/weekly-available', auth(UserRole.TUTOR), tutorController.createTutorWeeklyAvailability);
-
-//  /available-slot route for creating weekly availability slot
-// router.post('/available-slot', auth(UserRole.TUTOR), tutorController.createTutorAvailableSlot);
 
 //  /exception route for creating exception on a special day
 router.post('/exception', auth(UserRole.TUTOR), tutorController.createTutorException);

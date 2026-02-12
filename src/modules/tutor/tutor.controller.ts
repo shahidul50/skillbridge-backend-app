@@ -23,16 +23,18 @@ const getAllTutors = async (req: Request, res: Response, next: NextFunction) => 
     }
 }
 
-//get all tutor by id with tutor profile, review, availability.
-const getTutorById = async (req: Request, res: Response, next: NextFunction) => {
+//get tutor name, image, with tutor profile by id
+const getTutorProfileById = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        // req.body = { tutorProfileId: req.params.id, startDate: new Date("2026-02-11").toISOString() };
-        // const result = await getAvailableSlots(req, res, next);
-        // res.status(200).json({
-        //     success: true,
-        //     message: 'Tutor fetched successfully',
-        //     data: result
-        // });
+        const tutorProfileId = req.params?.id;
+
+        console.log(tutorProfileId)
+        const result = await tutorService.getTutorProfileById(tutorProfileId as string);
+        res.status(200).json({
+            success: true,
+            message: 'Tutor profile fetched successfully',
+            data: result
+        });
     } catch (err: any) {
         next(err);
     }
@@ -268,7 +270,7 @@ const getAvailableSlots = async (req: Request, res: Response, next: NextFunction
 
 const tutorController = {
     getAllTutors,
-    getTutorById,
+    getTutorProfileById,
     updateTutorProfile,
     setTutorCategories,
     getTutorAllSession,

@@ -1,7 +1,7 @@
 import { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
-import { addDays, differenceInCalendarDays, differenceInMinutes, format, isAfter, isBefore, isSameDay, parse, startOfDay } from "date-fns";
+import { addDays, differenceInCalendarDays, differenceInMinutes, format, formatDistanceToNow, isAfter, isBefore, isSameDay, parse, startOfDay } from "date-fns";
 
 
 type UpdatableDataInput = {
@@ -119,7 +119,6 @@ const getAllTutors = async (query: any) => {
     }
 }
 
-//get all tutor by id with tutor profile, review, availability.
 const getTutorById = async (loggedTutorId: string) => {
     return await prisma.user.findUniqueOrThrow({
         where: {
@@ -134,6 +133,50 @@ const getTutorById = async (loggedTutorId: string) => {
             phoneNumber: true,
         },
     });
+}
+
+//get all tutor by id with tutor profile, review, availability.
+const getTutorProfileById = async (tutorId: string) => {
+    const result = await prisma.tutorProfile.findUnique({
+        where: { id: tutorId },
+        include: {
+            user: {
+                select: {
+                    name: true,
+                    image: true,
+                    email: true,
+                }
+            },
+            reviews: {
+                orderBy: { createdAt: 'desc' },
+                take: 10, // লেটেস্ট ১০টি রিভিউ
+                include: {
+                    user: {
+                        select: {
+                            name: true,
+                            image: true
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    if (!result) {
+        throw new AppError("Tutor profile not found", 404);
+    }
+
+    // রিভিউগুলোর সাথে 'timeAgo' ক্যালকুলেট করে পাঠানো
+    const formattedReviews = result.reviews.map(review => ({
+        ...review,
+        timeAgo: formatDistanceToNow(new Date(review.createdAt), { addSuffix: true })
+        // এটি "2 days ago", "about 1 month ago" ইত্যাদি আউটপুট দিবে
+    }));
+
+    return {
+        ...result,
+        reviews: formattedReviews
+    };
 }
 
 //update tutor profile
@@ -541,6 +584,7 @@ const getAvailableSlots = async (tutorProfileId: string, startDateStr?: string) 
 
 const tutorService = {
     getAllTutors,
+    getTutorProfileById,
     getTutorById,
     updateTutorProfile,
     setTutorCategories,
