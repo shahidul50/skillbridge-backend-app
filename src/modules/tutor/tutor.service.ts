@@ -149,7 +149,7 @@ const getTutorProfileById = async (tutorId: string) => {
             },
             reviews: {
                 orderBy: { createdAt: 'desc' },
-                take: 10, // লেটেস্ট ১০টি রিভিউ
+                take: 10,
                 include: {
                     user: {
                         select: {
@@ -166,11 +166,11 @@ const getTutorProfileById = async (tutorId: string) => {
         throw new AppError("Tutor profile not found", 404);
     }
 
-    // রিভিউগুলোর সাথে 'timeAgo' ক্যালকুলেট করে পাঠানো
+    // recent 10 reviews with time calculation 
     const formattedReviews = result.reviews.map(review => ({
         ...review,
         timeAgo: formatDistanceToNow(new Date(review.createdAt), { addSuffix: true })
-        // এটি "2 days ago", "about 1 month ago" ইত্যাদি আউটপুট দিবে
+        // Output is: "2 days ago", "about 1 month ago" 
     }));
 
     return {

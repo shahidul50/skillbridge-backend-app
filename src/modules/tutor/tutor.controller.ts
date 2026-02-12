@@ -8,11 +8,11 @@ import cloudinary from "../../lib/cloudinary";
 //get all tutors with pagination, search and filtering.
 const getAllTutors = async (req: Request, res: Response, next: NextFunction) => {
     try {
-
         // Zod Validation (Query parameters)
-        const validatedQuery = tutorQuerySchema.parse({ query: req.query }).query;
+        const validation = tutorQuerySchema.safeParse({ query: req.query });
+        if (!validation.success) throw validation.error;
 
-        const result = await tutorService.getAllTutors(validatedQuery);
+        const result = await tutorService.getAllTutors(validation.data.query);
         res.status(200).json({
             success: true,
             message: 'Tutors fetched successfully',
@@ -28,7 +28,6 @@ const getTutorProfileById = async (req: Request, res: Response, next: NextFuncti
     try {
         const tutorProfileId = req.params?.id;
 
-        console.log(tutorProfileId)
         const result = await tutorService.getTutorProfileById(tutorProfileId as string);
         res.status(200).json({
             success: true,
@@ -244,7 +243,7 @@ const createTutorException = async (req: Request, res: Response, next: NextFunct
 //get available slots for a tutor based on weekly availability, exceptions and already booked slots.
 const getAvailableSlots = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const validatedQuery = getAvailableSlotsSchema.safeParse({ query: req.body });
+        const validatedQuery = getAvailableSlotsSchema.safeParse({ query: req.query });
         if (!validatedQuery.success) throw validatedQuery.error;
 
         const { tutorProfileId, startDate } = validatedQuery.data.query;

@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import config from '../lib/config';
 
 interface IEmailOptions {
     to: string;
@@ -13,14 +14,14 @@ export const sendEmail = async (options: IEmailOptions) => {
         port: 587,
         secure: false,
         auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
+            user: config.email_user,
+            pass: config.email_pass,
         },
     });
 
     // Setup Email content
     const mailOptions = {
-        from: `"SkillBridge App" <${process.env.EMAIL_USER}>`,
+        from: `"SkillBridge App" <${config.email_user}>`,
         to: options.to,
         subject: options.subject,
         html: options.html,
