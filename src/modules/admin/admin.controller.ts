@@ -82,6 +82,8 @@ const verifyPaymentTransaction = async (req: Request, res: Response, next: NextF
         const { id } = validation.data.params;
         const { status } = validation.data.body;
 
+        console.log(id, status)
+
         const result = await adminService.verifyPaymentTransaction(id, status);
         res.status(200).json({
             success: true,
@@ -123,6 +125,20 @@ const getStats = async (req: Request, res: Response, next: NextFunction) => {
 }
 
 
+const getAllPlatformPaymentAccount = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const result = await adminService.getAllPlatformPaymentAccount();
+        res.status(200).json({
+            success: true,
+            message: `Platform accounts fetched successfully.`,
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
+
 const adminController = {
     getAllPaymentAccount,
     getAllPlatformUser,
@@ -130,7 +146,8 @@ const adminController = {
     getAllPayments,
     verifyPaymentTransaction,
     getStats,
-    getAllBooking
+    getAllBooking,
+    getAllPlatformPaymentAccount
 }
 
 

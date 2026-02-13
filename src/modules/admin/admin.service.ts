@@ -243,7 +243,7 @@ const verifyPaymentTransaction = async (paymentId: string, status: "SUCCESS" | "
         include: {
             booking: {
                 include: {
-                    student: true,
+                    user: true,
                     availabilitySlot: {
                         include: {
                             tutorProfile: { include: { user: true } }
@@ -497,6 +497,11 @@ const getAllBooking = async (query: any) => {
     };
 }
 
+//get payment details 
+const getAllPlatformPaymentAccount = async () => {
+    return await prisma.platformPaymentAccount.findMany();
+}
+
 
 const adminService = {
     getAllPaymentAccount,
@@ -505,7 +510,8 @@ const adminService = {
     getAllPayments,
     verifyPaymentTransaction,
     getStats,
-    getAllBooking
+    getAllBooking,
+    getAllPlatformPaymentAccount
 }
 
 

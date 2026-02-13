@@ -41,7 +41,7 @@ const createBooking = async (req: Request, res: Response, next: NextFunction) =>
 
         const result = await bookingService.createBooking(studentId as string,
             validation.data);
-        res.status(200).json({
+        res.status(201).json({
             success: true,
             message: 'Booking created successfully',
             data: result

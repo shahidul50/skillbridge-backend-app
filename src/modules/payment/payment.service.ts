@@ -1,7 +1,7 @@
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 
-//get payment details 
+//get payment account details 
 const getAccountDetails = async () => {
 
     return await prisma.platformPaymentAccount.findFirst({
