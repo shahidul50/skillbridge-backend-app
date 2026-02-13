@@ -15,7 +15,7 @@ export const auth = betterAuth({
     autoSignIn: false,
     requireEmailVerification: true,
   },
-  trustedOrigins: [config.app_url!],
+  trustedOrigins: [config.app_url!, "http://localhost:5000"],
   user: {
     additionalFields: {
       role: {
@@ -59,7 +59,7 @@ export const auth = betterAuth({
       if (url.pathname.endsWith("/sign-up/email")) {
         const requestedRole = body?.role;
         const userEmail = body?.email?.toLowerCase();
-        const superAdminEmail = "admin@skillbridge.com";
+        const superAdminEmail = config.seeding_acc_email;
 
         if (requestedRole === "ADMIN") {
           if (userEmail !== superAdminEmail) {

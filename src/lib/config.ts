@@ -13,6 +13,9 @@ const config = {
     cloudinary_cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     cloudinary_api_key: process.env.CLOUDINARY_API_KEY,
     cloudinary_api_secret: process.env.CLOUDINARY_API_SECRET,
+    seeding_acc_email: process.env.ADMIN_SEEDING_ACCOUNT_EMAIL,
+    seeding_acc_name: process.env.ADMIN_SEEDING_ACCOUNT_NAME,
+    seeding_acc_pass: process.env.ADMIN_SEEDING_ACCOUNT_PASSWORD
 };
 
 export default config;

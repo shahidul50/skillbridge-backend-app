@@ -11,13 +11,14 @@ import { reviewRouter } from './modules/review/review.router';
 import authRouter from './modules/auth/auth.router';
 import { paymentRouter } from './modules/payment/payment.router';
 import adminRouter from './modules/admin/admin.router';
+import config from './lib/config';
 const app: Application = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(
     cors({
-        origin: process.env.APP_URL,
+        origin: [config.app_url!],
         credentials: true,
     })
 );
