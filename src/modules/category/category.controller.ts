@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import categoryService from "./category.service";
 import { AppError } from "../../utils/AppError";
-import { categoryQuerySchema, createCategorySchema } from "../../validation/category.validation";
+import { categoryQuerySchema, createCategorySchema, updateCategorySchema } from "../../validation/category.validation";
 import cloudinary from "../../lib/cloudinary";
 import fs from "fs/promises";
 
@@ -81,9 +81,118 @@ const createCategory = async (req: Request, res: Response, next: NextFunction) =
     }
 }
 
+//update category
+const updateCategory = async (req: Request, res: Response, next: NextFunction) => {
+    let localFilePath: string | undefined = req.file?.path;
+    try {
+        const id = req.params.id as string;
+
+        // check if category exists
+        const existingCategory = await categoryService.getCategoryById(id);
+        if (!existingCategory) {
+            throw new AppError("Category not found", 404);
+        }
+
+        // Zod validation for name fields
+        const validation = updateCategorySchema.safeParse(req.body);
+        if (!validation.success) {
+            throw validation.error;
+        }
+
+        const { name: categoryName } = validation.data;
+
+        const updateData: Partial<{ name: string, image: string }> = {};
+
+        if (categoryName) {
+            const isExistingCategory = await categoryService.isExistingCategory(categoryName);
+            //check if category name already exists and it's not the current one
+            if (isExistingCategory && isExistingCategory.id !== id) {
+                throw new AppError("Category name already exists", 400, "DUPLICATE_ERROR");
+            }
+            updateData.name = categoryName;
+        }
+
+        if (localFilePath) {
+            // Cloudinary upload
+            const cloudinaryResult = await cloudinary.uploader.upload(localFilePath, {
+                folder: "skillbridge/categories",
+            });
+            updateData.image = cloudinaryResult?.secure_url;
+
+            // delete old image from cloudinary
+            const oldImageUrl = existingCategory.image;
+            const publicId = extractPublicId(oldImageUrl);
+            if (publicId) {
+                await cloudinary.uploader.destroy(publicId);
+            }
+        }
+
+        const result = await categoryService.updateCategory(id, updateData);
+
+        if (localFilePath) {
+            await fs.unlink(localFilePath);
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Category updated successfully',
+            data: result
+        });
+    } catch (err: any) {
+        if (localFilePath) {
+            await fs.unlink(localFilePath);
+        }
+        next(err);
+    }
+}
+
+//delete category
+const deleteCategory = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const id = req.params.id as string;
+
+        // check if category exists
+        const existingCategory = await categoryService.getCategoryById(id);
+        if (!existingCategory) {
+            throw new AppError("Category not found", 404);
+        }
+
+        // service will check for relational data
+        const result = await categoryService.deleteCategory(id);
+
+        // if success, delete image from Cloudinary
+        const imageUrl = existingCategory.image;
+        const publicId = extractPublicId(imageUrl);
+        if (publicId) {
+            await cloudinary.uploader.destroy(publicId);
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Category deleted successfully',
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
+// helper function to extract public_id from cloudinary URL
+const extractPublicId = (url: string) => {
+    const parts = url.split('/');
+    const folderIndex = parts.indexOf('skillbridge');
+    if (folderIndex !== -1) {
+        const publicIdWithExtension = parts.slice(folderIndex).join('/');
+        return publicIdWithExtension.split('.')[0];
+    }
+    return null;
+}
+
 const categoryController = {
     getAllCategories,
-    createCategory
+    createCategory,
+    updateCategory,
+    deleteCategory
 }
 
 export default categoryController;

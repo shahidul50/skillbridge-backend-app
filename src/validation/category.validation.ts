@@ -6,6 +6,12 @@ export const createCategorySchema = z.object({
     }).min(3, "Name must be at least 3 characters!"),
 });
 
+export const updateCategorySchema = z.object({
+    name: z.string({
+        error: "Category name is required!",
+    }).min(3, "Name must be at least 3 characters!").optional(),
+});
+
 export const categoryQuerySchema = z.object({
     query: z.object({
         page: z.string().optional().transform((val) => (val ? Number(val) : 1)),

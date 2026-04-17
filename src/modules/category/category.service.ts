@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
 
 //get all categories
 const getAllCategories = async (payload: {
@@ -60,10 +61,52 @@ const createCategory = async (data: { name: string, image: string }) => {
     });
 }
 
+//get category by id
+const getCategoryById = async (id: string) => {
+    return await prisma.category.findUnique({
+        where: {
+            id
+        },
+    });
+}
+
+//update category
+const updateCategory = async (id: string, data: Partial<{ name: string, image: string }>) => {
+    return await prisma.category.update({
+        where: {
+            id
+        },
+        data,
+    });
+}
+
+//delete category
+const deleteCategory = async (id: string) => {
+    // Check for relational data (TutorProfile/TutorCategory)
+    const hasRelations = await prisma.tutorCategory.findFirst({
+        where: {
+            categoryId: id
+        },
+    });
+
+    if (hasRelations) {
+        throw new AppError("Cannot delete category as it is associated with tutors", 400, "RELATIONAL_DATA_EXIST");
+    }
+
+    return await prisma.category.delete({
+        where: {
+            id
+        },
+    });
+}
+
 const categoryService = {
     getAllCategories,
     createCategory,
-    isExistingCategory
+    isExistingCategory,
+    getCategoryById,
+    updateCategory,
+    deleteCategory
 }
 
 
