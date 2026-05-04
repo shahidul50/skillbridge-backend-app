@@ -79,6 +79,19 @@ const getAllTutors = async (query: any) => {
 
     const skip = (page - 1) * limit;
 
+    // Custom Sorting Logic
+    let orderBy: any = { [sortBy]: sortOrder };
+
+    if (sortBy === 'highest-rated') {
+        orderBy = { rating: 'desc' };
+    } else if (sortBy === 'low-to-high') {
+        orderBy = { hourlyRate: 'asc' };
+    } else if (sortBy === 'high-to-low') {
+        orderBy = { hourlyRate: 'desc' };
+    } else if (sortBy === 'most-reviews') {
+        orderBy = { totalReviews: 'desc' };
+    }
+
     const [tutors, total] = await Promise.all([
         prisma.tutorProfile.findMany({
             where: whereConditions.AND.length > 0 ? whereConditions : {},
@@ -101,7 +114,7 @@ const getAllTutors = async (query: any) => {
             },
             skip,
             take: limit,
-            orderBy: { [sortBy]: sortOrder },
+            orderBy,
         }),
         prisma.tutorProfile.count({
             where: whereConditions.AND.length > 0 ? whereConditions : {}

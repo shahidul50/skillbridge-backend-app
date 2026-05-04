@@ -17,7 +17,7 @@ export const tutorQuerySchema = z.object({
     query: z.object({
         page: z.string().optional().transform((val) => (val ? Number(val) : 1)),
         limit: z.string().optional().transform((val) => (val ? Number(val) : 10)),
-        sortBy: z.enum(["hourlyRate", "rating", "createdAt"]).optional().default("createdAt"),
+        sortBy: z.enum(["createdAt", "highest-rated", "low-to-high", "high-to-low", "most-reviews"]).optional().default("createdAt"),
         sortOrder: z.enum(["asc", "desc"]).optional().default("asc"),
         searchTerm: z.string().optional(),
         categories: z.string().optional(), // (e.g., "Math,Physics")
