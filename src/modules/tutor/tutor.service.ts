@@ -34,12 +34,17 @@ const getAllTutors = async (query: any) => {
 
     const whereConditions: any = { AND: [] };
 
-    // Text Search (search title and bio fields in tutor profile)
+    // Text Search (search title, bio and name fields)
     if (searchTerm) {
         whereConditions.AND.push({
             OR: [
                 { title: { contains: searchTerm, mode: 'insensitive' } },
                 { bio: { contains: searchTerm, mode: 'insensitive' } },
+                {
+                    user: {
+                        name: { contains: searchTerm, mode: 'insensitive' }
+                    }
+                }
             ]
         });
     }

@@ -16,7 +16,7 @@ export const updateTutorSchema = z.object({
 export const tutorQuerySchema = z.object({
     query: z.object({
         page: z.string().optional().transform((val) => (val ? Number(val) : 1)),
-        limit: z.string().optional().transform((val) => (val ? Number(val) : 10)),
+        limit: z.string().optional().transform((val) => (val ? Number(val) : 12)),
         sortBy: z.enum(["createdAt", "highest-rated", "low-to-high", "high-to-low", "most-reviews"]).optional().default("createdAt"),
         sortOrder: z.enum(["asc", "desc"]).optional().default("asc"),
         searchTerm: z.string().optional(),
