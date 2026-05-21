@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import tutorService from "./tutor.service";
 import fs from "fs/promises";
 import { AppError } from "../../utils/AppError";
-import { createTutorExceptionSchema, createWeeklyAvailabilitySchema, deleteWeeklyAvailabilitySchema, getAvailableSlotsSchema, setTutorCategoriesSchema, tutorQuerySchema, tutorSessionQuerySchema, updateBookingStatusByTutorSchema, updateTutorSchema } from "../../validation/tutor.validation";
+import { createTutorExceptionSchema, createWeeklyAvailabilitySchema, deleteTutorExceptionSchema, deleteWeeklyAvailabilitySchema, getAvailableSlotsSchema, setTutorCategoriesSchema, tutorQuerySchema, tutorSessionQuerySchema, updateBookingStatusByTutorSchema, updateTutorSchema, updateWeeklyAvailabilitySchema } from "../../validation/tutor.validation";
 import cloudinary from "../../lib/cloudinary";
 
 //get all tutors with pagination, search and filtering.
@@ -23,12 +23,12 @@ const getAllTutors = async (req: Request, res: Response, next: NextFunction) => 
     }
 }
 
-//get tutor name, image, with tutor profile by id
-const getTutorProfileById = async (req: Request, res: Response, next: NextFunction) => {
+//get tutor name, image, with tutor profile by userId
+const getTutorProfileByUserId = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const tutorProfileId = req.params?.id;
+        const userId = req.user?.id as string;
 
-        const result = await tutorService.getTutorProfileById(tutorProfileId as string);
+        const result = await tutorService.getTutorProfileByUserId(userId);
         res.status(200).json({
             success: true,
             message: 'Tutor profile fetched successfully',
@@ -39,6 +39,20 @@ const getTutorProfileById = async (req: Request, res: Response, next: NextFuncti
     }
 }
 
+//get tutor profile, review, availability by tutorProfileId
+const getTutorProfileByProfileId = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const tutorProfileId = req.params.profileId as string;
+        const result = await tutorService.getTutorProfileByProfileId(tutorProfileId);
+        res.status(200).json({
+            success: true,
+            message: 'Tutor profile fetched successfully',
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
 
 //update tutor profile
 const updateTutorProfile = async (req: Request, res: Response, next: NextFunction) => {
@@ -98,6 +112,25 @@ const updateTutorProfile = async (req: Request, res: Response, next: NextFunctio
         });
     } catch (err: any) {
         if (localFilePath) await fs.unlink(localFilePath);
+        next(err);
+    }
+}
+
+//get tutor selected categories
+const getTutorSelectedCategories = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const tutorId = req.user?.id;
+
+        const tutorProfile = await tutorService.getTutorProfileByUserId(tutorId!);
+        if (!tutorProfile) throw new AppError("Tutor profile not found", 404, "NOT_FOUND");
+
+        const result = await tutorService.getTutorSelectedCategories(tutorProfile.id);
+        res.status(200).json({
+            success: true,
+            message: 'Tutor selected categories fetched successfully',
+            data: result
+        });
+    } catch (err: any) {
         next(err);
     }
 }
@@ -174,7 +207,7 @@ const updateBookingStatus = async (req: Request, res: Response, next: NextFuncti
 }
 
 //Create weekly availability slot.
-const createTutorWeeklyAvailability = async (req: Request, res: Response, next: NextFunction) => {
+const createTutorWeeklyAvailableSlots = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const tutorId = req.user?.id;
 
@@ -196,8 +229,52 @@ const createTutorWeeklyAvailability = async (req: Request, res: Response, next: 
     }
 }
 
+//Get tutor's weekly available slots
+const getTutorWeeklyAvailableSlots = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const tutorId = req.user?.id;
+        if (!tutorId) {
+            return res.status(403).json({ success: false, message: "Tutor not found" });
+        }
+        const tutorProfile = await tutorService.getTutorProfileByUserId(tutorId as string);
+        if (!tutorProfile) {
+            return res.status(403).json({ success: false, message: "Tutor not found" });
+        }
+        const result = await tutorService.getWeeklyAvailableSlots(tutorProfile.id);
+        res.status(200).json({
+            success: true,
+            message: 'Tutor weekly available slots fetched successfully',
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
+//update weekly availability slot.
+const updateTutorWeeklyAvailableSlots = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const tutorId = req.user?.id;
+        const tutorProfile = await tutorService.getTutorProfileByUserId(tutorId!);
+        if (!tutorProfile) throw new AppError("Tutor profile not found", 404, "NOT_FOUND");
+
+        // Zod validation
+        const validation = updateWeeklyAvailabilitySchema.safeParse({ params: req.params, body: req.body });
+        if (!validation.success) throw validation.error;
+
+        const result = await tutorService.updateTutorWeeklyAvailability(tutorProfile.id, validation.data.params.id, validation.data.body);
+        res.status(200).json({
+            success: true,
+            message: 'Tutor weekly availability updated successfully',
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
 //delete weekly availability slot.
-const deleteTutorWeeklyAvailability = async (req: Request, res: Response, next: NextFunction) => {
+const deleteTutorWeeklyAvailableSlots = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const tutorId = req.user?.id;
         const tutorProfile = await tutorService.getTutorProfileByUserId(tutorId!);
@@ -226,6 +303,7 @@ const createTutorException = async (req: Request, res: Response, next: NextFunct
         const tutorProfile = await tutorService.getTutorProfileByUserId(tutorId!);
         if (!tutorProfile) throw new AppError("Tutor profile not found", 404, "NOT_FOUND");
 
+
         const validation = createTutorExceptionSchema.safeParse({ body: req.body });
         if (!validation.success) throw validation.error;
 
@@ -233,6 +311,45 @@ const createTutorException = async (req: Request, res: Response, next: NextFunct
         res.status(201).json({
             success: true,
             message: 'Tutor exception (Off-day) created successfully',
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
+//delete exception on a special day.
+const deleteTutorException = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const tutorId = req.user?.id;
+        const tutorProfile = await tutorService.getTutorProfileByUserId(tutorId!);
+        if (!tutorProfile) throw new AppError("Tutor profile not found", 404, "NOT_FOUND");
+
+        const validation = deleteTutorExceptionSchema.safeParse({ params: req.params });
+        if (!validation.success) throw validation.error;
+
+        const result = await tutorService.deleteTutorException(tutorProfile.id, validation.data.params.id);
+        res.status(200).json({
+            success: true,
+            message: 'Tutor exception deleted successfully',
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
+//get all exceptions for a tutor.
+const getAllTutorException = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const tutorId = req.user?.id;
+        const tutorProfile = await tutorService.getTutorProfileByUserId(tutorId!);
+        if (!tutorProfile) throw new AppError("Tutor profile not found", 404, "NOT_FOUND");
+
+        const result = await tutorService.getAllTutorException(tutorProfile.id);
+        res.status(200).json({
+            success: true,
+            message: 'Tutor exceptions fetched successfully',
             data: result
         });
     } catch (err: any) {
@@ -269,15 +386,21 @@ const getAvailableSlots = async (req: Request, res: Response, next: NextFunction
 
 const tutorController = {
     getAllTutors,
-    getTutorProfileById,
+    getTutorProfileByUserId,
     updateTutorProfile,
     setTutorCategories,
     getTutorAllSession,
     updateBookingStatus,
-    createTutorWeeklyAvailability,
-    deleteTutorWeeklyAvailability,
+    createTutorWeeklyAvailableSlots,
+    deleteTutorWeeklyAvailableSlots,
     createTutorException,
-    getAvailableSlots
+    deleteTutorException,
+    getAllTutorException,
+    getAvailableSlots,
+    getTutorProfileByProfileId,
+    getTutorSelectedCategories,
+    getTutorWeeklyAvailableSlots,
+    updateTutorWeeklyAvailableSlots
 }
 
 export default tutorController;

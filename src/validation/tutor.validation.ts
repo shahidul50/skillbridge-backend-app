@@ -38,10 +38,14 @@ export const setTutorCategoriesSchema = z.object({
 export const createTutorExceptionSchema = z.object({
     body: z.object({
         // ISO Date format (e.g., "2026-02-15")
-        date: z.string().refine((val) => !isNaN(Date.parse(val)), {
+        date: z.string({
+            error: "Date is required",
+        }).refine((val) => !isNaN(Date.parse(val)), {
             message: "Invalid date format. Use YYYY-MM-DD",
         }),
-        reason: z.string().min(5, "Reason must be at least 5 characters long").optional(),
+        reason: z.string({
+            error: "Reason is required",
+        }).min(5, "Reason must be at least 5 characters long"),
     }),
 });
 
@@ -58,6 +62,16 @@ export const createWeeklyAvailabilitySchema = z.object({
     }).refine((data) => data.startTime < data.endTime, {
         message: "End time must be after start time",
         path: ["endTime"],
+    }),
+});
+
+// Validation schema for updating weekly availability slot
+export const updateWeeklyAvailabilitySchema = z.object({
+    params: z.object({
+        id: z.uuid("Invalid Slot ID format"),
+    }),
+    body: z.object({
+        isActive: z.boolean(),
     }),
 });
 
@@ -95,4 +109,11 @@ export const updateBookingStatusByTutorSchema = z.object({
     params: z.object({
         bookingId: z.string({ error: "Booking ID is required in query params" })
     })
+});
+
+// Validation schema for deleting tutor exception
+export const deleteTutorExceptionSchema = z.object({
+    params: z.object({
+        id: z.uuid("Invalid Exception ID format"),
+    }),
 });

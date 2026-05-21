@@ -14,27 +14,43 @@ router.get('/sessions', auth(UserRole.TUTOR), tutorController.getTutorAllSession
 //  /available-slot route for getting available slots
 router.get('/available-slots', tutorController.getAvailableSlots);
 
-//  /:id route for getting tutor by id
-router.get('/:id', tutorController.getTutorProfileById);
+//  /weekly-available-slots route for get all weekly available slot
+router.get('/weekly-available-slots', auth(UserRole.TUTOR), tutorController.getTutorWeeklyAvailableSlots);
+
+//  /profile route for getting tutor details by userId
+router.get('/profile', auth(UserRole.TUTOR), tutorController.getTutorProfileByUserId);
+
+//  /categories route for getting tutor selected categories
+router.get('/my-categories', auth(UserRole.TUTOR), tutorController.getTutorSelectedCategories);
 
 //  /add-categories route for creating tutors categories
 router.post('/add-categories', auth(UserRole.TUTOR), tutorController.setTutorCategories);
 
-//  /weekly-available route for creating weekly availability slot
-router.post('/weekly-available', auth(UserRole.TUTOR), tutorController.createTutorWeeklyAvailability);
+//  /weekly-available-slots route for create weekly availability slot
+router.post('/weekly-available-slots', auth(UserRole.TUTOR), tutorController.createTutorWeeklyAvailableSlots);
 
-//  /exception route for creating exception on a special day
+//  /exception route for getting all tutor availability exceptions
+router.get('/exception', auth(UserRole.TUTOR), tutorController.getAllTutorException);
+
+//  /:profileId route for getting tutor details by tutorProfileId
+router.get('/:profileId', tutorController.getTutorProfileByProfileId);
+
+//  /exception route for create exception on a special day
 router.post('/exception', auth(UserRole.TUTOR), tutorController.createTutorException);
 
-//  /session/:bookingId route for updating session status to 'COMPLETED'
+//  /session/:bookingId route for update session status to 'COMPLETED'
 router.patch('/sessions/:bookingId', auth(UserRole.TUTOR), tutorController.updateBookingStatus);
 
-//  / route for updating tutor information
+//  / route for update tutor information
 router.put('/', auth(UserRole.TUTOR), uploadHandler.single('avatar'), tutorController.updateTutorProfile);
 
-//  /weekly-available/:id route for deleting single weekly availability slot
-router.delete('/weekly-available/:id', auth(UserRole.TUTOR), tutorController.deleteTutorWeeklyAvailability);
+//  /weekly-available-slots/:id route for update single weekly availability slot
+router.patch('/weekly-available-slots/:id', auth(UserRole.TUTOR), tutorController.updateTutorWeeklyAvailableSlots);
 
+//  /weekly-available-slots/:id route for delete single weekly availability slot
+router.delete('/weekly-available-slots/:id', auth(UserRole.TUTOR), tutorController.deleteTutorWeeklyAvailableSlots);
 
+//  /exception/:id route for delete single tutor availability exception
+router.delete('/exception/:id', auth(UserRole.TUTOR), tutorController.deleteTutorException);
 
 export const tutorRouter: Router = router;

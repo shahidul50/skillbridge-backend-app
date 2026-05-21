@@ -153,16 +153,33 @@ const getTutorById = async (loggedTutorId: string) => {
     });
 }
 
-//get all tutor by id with tutor profile, review, availability.
-const getTutorProfileById = async (tutorId: string) => {
-    const result = await prisma.tutorProfile.findUnique({
-        where: { id: tutorId },
+// get tutor profile data by userId
+const getTutorProfileByUserId = async (userId: string) => {
+    return await prisma.tutorProfile.findUniqueOrThrow({
+        where: {
+            userId
+        },
         include: {
             user: {
                 select: {
                     name: true,
                     image: true,
-                    email: true,
+                    phoneNumber: true,
+                }
+            }
+        }
+    });
+}
+
+//get tutor profile, review, availability by tutorProfileId
+const getTutorProfileByProfileId = async (tutorProfileId: string) => {
+    const result = await prisma.tutorProfile.findUnique({
+        where: { id: tutorProfileId },
+        include: {
+            user: {
+                select: {
+                    name: true,
+                    image: true
                 }
             },
             reviews: {
@@ -172,7 +189,17 @@ const getTutorProfileById = async (tutorId: string) => {
                     user: {
                         select: {
                             name: true,
-                            image: true
+                            image: true,
+                        }
+                    }
+                }
+            },
+            tutorCategories: {
+                include: {
+                    category: {
+                        select: {
+                            id: true,
+                            name: true
                         }
                     }
                 }
@@ -184,6 +211,32 @@ const getTutorProfileById = async (tutorId: string) => {
         throw new AppError("Tutor profile not found", 404);
     }
 
+    // Get completed bookings to calculate class hours and unique student count
+    const completedBookings = await prisma.booking.findMany({
+        where: {
+            tutorProfileId,
+            status: "COMPLETED"
+        },
+        include: {
+            availabilitySlot: true
+        }
+    });
+
+    let totalMinutes = 0;
+    const studentIds = new Set<string>();
+
+    completedBookings.forEach((booking) => {
+        if (booking.availabilitySlot) {
+            const start = parse(booking.availabilitySlot.startTime, "HH:mm", new Date());
+            const end = parse(booking.availabilitySlot.endTime, "HH:mm", new Date());
+            totalMinutes += differenceInMinutes(end, start);
+        }
+        studentIds.add(booking.studentId);
+    });
+
+    const totalClassHours = parseFloat((totalMinutes / 60).toFixed(2));
+    const totalUniqueStudents = studentIds.size;
+
     // recent 10 reviews with time calculation 
     const formattedReviews = result.reviews.map(review => ({
         ...review,
@@ -191,9 +244,15 @@ const getTutorProfileById = async (tutorId: string) => {
         // Output is: "2 days ago", "about 1 month ago" 
     }));
 
+    // Flatten category details to a simpler array
+    const tutorSelectedCategory = result.tutorCategories.map(tc => tc.category);
+
     return {
         ...result,
-        reviews: formattedReviews
+        reviews: formattedReviews,
+        totalClassHours,
+        totalUniqueStudents,
+        tutorSelectedCategory
     };
 }
 
@@ -237,11 +296,26 @@ const updateTutorProfile = async (loggedTutorId: string, updatableData: Updatabl
 }
 
 //get tutor profile by user Id
-const getTutorProfileByUserId = async (userId: string) => {
-    return await prisma.tutorProfile.findUnique({
-        where: { userId },
+// const getTutorProfileByUserId = async (userId: string) => {
+//     return await prisma.tutorProfile.findUnique({
+//         where: { userId },
+//         select: {
+//             id: true,
+//         }
+//     });
+// }
+
+// get tutor selected categories
+const getTutorSelectedCategories = async (tutorProfileId: string) => {
+    return await prisma.tutorCategory.findMany({
+        where: { tutorProfileId },
         select: {
-            id: true,
+            category: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            }
         }
     });
 }
@@ -457,6 +531,43 @@ const createTutorWeeklyAvailability = async (tutorProfileId: string, payload: an
     });
 }
 
+//Get tutor's weekly available slots
+const getWeeklyAvailableSlots = async (tutorProfileId: string) => {
+    return await prisma.tutorWeeklyAvailability.findMany({
+        where: { tutorProfileId },
+        select: {
+            id: true,
+            dayOfWeek: true,
+            startTime: true,
+            endTime: true,
+            isActive: true,
+        },
+        orderBy: {
+            dayOfWeek: "asc"
+        }
+    });
+}
+
+//update weekly availability slot.
+const updateTutorWeeklyAvailability = async (tutorProfileId: string, slotId: string, payload: { isActive: boolean }) => {
+    const slot = await prisma.tutorWeeklyAvailability.findUnique({
+        where: { id: slotId }
+    });
+
+    if (!slot) {
+        throw new AppError("Time slot not found", 404, "NOT_FOUND");
+    }
+
+    if (slot.tutorProfileId !== tutorProfileId) {
+        throw new AppError("You are not authorized to update this slot", 403, "FORBIDDEN");
+    }
+
+    return await prisma.tutorWeeklyAvailability.update({
+        where: { id: slotId },
+        data: { isActive: payload.isActive }
+    });
+}
+
 //delete weekly availability slot.
 const deleteTutorWeeklyAvailability = async (tutorProfileId: string, slotId: string) => {
     // check if the slot exists 
@@ -528,6 +639,46 @@ const createTutorException = async (tutorProfileId: string, payload: any) => {
     });
 }
 
+//delete tutor availability exception.
+const deleteTutorException = async (tutorProfileId: string, exceptionId: string) => {
+    // check if the exception exists
+    const exception = await prisma.tutorAvailabilityException.findUnique({
+        where: { id: exceptionId }
+    });
+
+    if (!exception) {
+        throw new AppError("Exception not found", 404, "NOT_FOUND");
+    }
+
+    // check if the exception belongs to the tutor
+    if (exception.tutorProfileId !== tutorProfileId) {
+        throw new AppError("You are not authorized to delete this exception", 403, "FORBIDDEN");
+    }
+
+    // check if today is equal to or after the exception date
+    const today = startOfDay(new Date());
+    const exceptionDate = startOfDay(new Date(exception.date));
+
+    if (!isBefore(today, exceptionDate)) {
+        throw new AppError("Cannot delete exception on or after the exception date", 400, "INVALID_DATE");
+    }
+
+    // if all checks pass then delete the exception
+    return await prisma.tutorAvailabilityException.delete({
+        where: { id: exceptionId }
+    });
+}
+
+//get all exceptions for a tutor.
+const getAllTutorException = async (tutorProfileId: string) => {
+    return await prisma.tutorAvailabilityException.findMany({
+        where: { tutorProfileId },
+        orderBy: {
+            date: "asc"
+        }
+    });
+}
+
 //get available slots for a tutor based on weekly availability, exceptions and already booked slots.
 const getAvailableSlots = async (tutorProfileId: string, startDateStr?: string) => {
     const now = new Date();
@@ -546,7 +697,7 @@ const getAvailableSlots = async (tutorProfileId: string, startDateStr?: string) 
         throw new AppError("You can only fetch slots within 4 days from today", 400, "DATE_OUT_OF_RANGE");
     }
 
-    const daysToGenerate = 3;
+    const daysToGenerate = startDateStr ? 1 : 3; // generate only 1 day if specific date is requested, otherwise next 3 days
     const availableSlots = [];
 
 
@@ -602,17 +753,22 @@ const getAvailableSlots = async (tutorProfileId: string, startDateStr?: string) 
 
 const tutorService = {
     getAllTutors,
-    getTutorProfileById,
+    getTutorProfileByProfileId,
     getTutorById,
     updateTutorProfile,
     setTutorCategories,
     getTutorAllSession,
     updateBookingStatus,
     createTutorWeeklyAvailability,
+    updateTutorWeeklyAvailability,
     deleteTutorWeeklyAvailability,
     createTutorException,
+    deleteTutorException,
+    getAllTutorException,
+    getAvailableSlots,
     getTutorProfileByUserId,
-    getAvailableSlots
+    getTutorSelectedCategories,
+    getWeeklyAvailableSlots
 }
 
 
