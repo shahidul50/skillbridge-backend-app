@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import bookingService from "./booking.service";
-import { bookingQuerySchema, cancelBookingSchema, createBookingSchema } from "../../validation/booking.validation";
+import { adminBookingQuerySchema, adminBookingReceiptSchema, bookingQuerySchema, createBookingSchema } from "../../validation/booking.validation";
 
 //get all tutors with pagination, search and filtering.
 const getAllBookingByAuthor = async (req: Request, res: Response, next: NextFunction) => {
@@ -30,20 +30,16 @@ const getAllBookingByAuthor = async (req: Request, res: Response, next: NextFunc
     }
 }
 
-//Create new booking
-const createBooking = async (req: Request, res: Response, next: NextFunction) => {
+// get all booking for admin dashboard
+const getAllBooking = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const studentId = req.user?.id;
-
-        // zod validation
-        const validation = createBookingSchema.safeParse(req.body);
+        //zod validation
+        const validation = adminBookingQuerySchema.safeParse({ query: req.query });
         if (!validation.success) throw validation.error;
-
-        const result = await bookingService.createBooking(studentId as string,
-            validation.data);
-        res.status(201).json({
+        const result = await bookingService.getAllBooking(validation.data.query);
+        res.status(200).json({
             success: true,
-            message: 'Booking created successfully',
+            message: `Booking fetched successfully.`,
             data: result
         });
     } catch (err: any) {
@@ -51,20 +47,52 @@ const createBooking = async (req: Request, res: Response, next: NextFunction) =>
     }
 }
 
-// Update booking status as ’CANCELLED’ of your own bookings.
-const updateBookingStatus = async (req: Request, res: Response, next: NextFunction) => {
+// get booking stats for admin dashboard
+const getBookingStats = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const result = await bookingService.getBookingStats();
+        res.status(200).json({
+            success: true,
+            message: `Booking statistics fetched successfully.`,
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
+// get booking receipt by bookingId for admin dashboard
+const getBookingReceipt = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const validation = adminBookingReceiptSchema.safeParse({ params: req.params });
+        if (!validation.success) throw validation.error;
+
+        const { id } = validation.data.params;
+        const result = await bookingService.getBookingReceipt(id);
+        res.status(200).json({
+            success: true,
+            message: `Booking receipt fetched successfully.`,
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
+//Create new booking with payment
+const createBookingWithPayment = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const studentId = req.user?.id;
 
-        // zod validation check
-        const validation = cancelBookingSchema.safeParse({ params: req.params });
+        // zod validation
+        const validation = createBookingSchema.safeParse(req.body);
         if (!validation.success) throw validation.error;
 
-        const result = await bookingService.updateBookingStatus(studentId as string,
-            validation.data.params.id);
-        res.status(200).json({
+        const result = await bookingService.createBookingWithPayment(studentId as string,
+            validation.data);
+        res.status(201).json({
             success: true,
-            message: 'Booking cancel successfully.',
+            message: 'Booking and payment created successfully',
             data: result
         });
     } catch (err: any) {
@@ -74,8 +102,10 @@ const updateBookingStatus = async (req: Request, res: Response, next: NextFuncti
 
 const bookingController = {
     getAllBookingByAuthor,
-    createBooking,
-    updateBookingStatus
+    getAllBooking,
+    getBookingStats,
+    getBookingReceipt,
+    createBookingWithPayment
 }
 
 export default bookingController;

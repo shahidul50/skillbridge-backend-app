@@ -13,7 +13,19 @@ export const paymentAccountSchema = z.object({
         method: z.enum(["BKASH", "NAGAD", "ROCKET"]),
         accountNumber: z.string()
             .min(11, "Account number must be at least 11 digits")
-            .max(15, "Account number is too long")
+            .max(15, "Account number is too long"),
+        accountType: z.enum(["PERSONAL", "MERCHANT"]),
+    }),
+});
+
+export const paymentAccountUpdateSchema = z.object({
+    body: z.object({
+        method: z.enum(["BKASH", "NAGAD", "ROCKET"]),
+        accountNumber: z.string()
+            .min(11, "Account number must be at least 11 digits")
+            .max(15, "Account number is too long"),
+        accountType: z.enum(["PERSONAL", "MERCHANT"]),
+        isActive: z.boolean(),
     }),
 });
 
@@ -51,5 +63,11 @@ export const verifyPaymentSchema = z.object({
         status: z.enum(["SUCCESS", "FAILED"], {
             error: "Verification status (SUCCESS/FAILED) is required",
         }),
+    }),
+});
+
+export const paymentAccountDetailsSchema = z.object({
+    params: z.object({
+        id: z.string({ error: "Payment ID is required" }),
     }),
 });

@@ -1,7 +1,8 @@
-import { differenceInMinutes, format, parse } from "date-fns";
+import { differenceInMinutes, format, parse, startOfMonth, subMonths } from "date-fns";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import { Prisma } from "../../../generated/prisma/client";
+
 
 
 //Get all booking by author Id.
@@ -67,9 +68,193 @@ const getAllBookingByAuthor = async (studentId: string, query: any) => {
     };
 }
 
-//Create new booking
-const createBooking = async (studentId: string, payload: any) => {
-    const { tutorProfileId, date, startTime, endTime } = payload;
+//Get all booking
+const getAllBooking = async (query: any) => {
+    const { page, limit, sortBy, sortOrder, searchTerm, bookingStatus } = query;
+
+    const pageNumber = Number(page);
+    const limitNumber = Number(limit);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const andConditions: Prisma.BookingWhereInput[] = [];
+
+    // remove those booking which status is 'CANCELLED'
+    andConditions.push({
+        status: {
+            not: 'CANCELLED'
+        }
+    });
+
+    // Comprehensive search logic: student name/email, tutor name/email, or category name
+    if (searchTerm) {
+        andConditions.push({
+            OR: [
+                { user: { name: { contains: searchTerm, mode: 'insensitive' } } },
+                { user: { email: { contains: searchTerm, mode: 'insensitive' } } },
+                { tutorProfile: { user: { name: { contains: searchTerm, mode: 'insensitive' } } } },
+                { tutorProfile: { user: { email: { contains: searchTerm, mode: 'insensitive' } } } },
+                {
+                    tutorProfile: {
+                        tutorCategories: {
+                            some: {
+                                category: {
+                                    name: { contains: searchTerm, mode: 'insensitive' }
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        });
+    }
+
+    // filtering logic
+    if (bookingStatus) andConditions.push({ status: bookingStatus });
+
+    const whereConditions: Prisma.BookingWhereInput =
+        andConditions.length > 0 ? { AND: andConditions } : {};
+
+    const [result, total] = await Promise.all([
+        prisma.booking.findMany({
+            where: whereConditions,
+            skip,
+            take: limitNumber,
+            orderBy: { [sortBy]: sortOrder },
+            include: {
+                user: { select: { name: true, email: true } },
+                tutorProfile: {
+                    include: {
+                        user: { select: { name: true, email: true } },
+                        tutorCategories: { include: { category: { select: { name: true } } } }
+                    }
+                },
+                availabilitySlot: { select: { date: true, startTime: true, endTime: true } }
+            }
+        }),
+        prisma.booking.count({ where: whereConditions }),
+    ]);
+
+
+    const formattedData = result.map(booking => ({
+        bookingId: booking.id,
+        studentName: booking.user?.name || "N/A",
+        studentEmail: booking.user?.email || "N/A",
+        tutorName: booking.tutorProfile?.user?.name || "N/A",
+        tutorEmail: booking.tutorProfile?.user?.email || "N/A",
+        tutorCategoryName: booking.tutorProfile?.tutorCategories.map(tc => tc.category.name) || [],
+        availabilitySlotDate: format(booking.availabilitySlot?.date, 'MMM dd, yyyy'),
+        availabilitySlotStartTime: format(parse(booking.availabilitySlot?.startTime, "HH:mm", new Date()), "hh:mm a"),
+        availabilitySlotEndTime: format(parse(booking.availabilitySlot?.endTime, "HH:mm", new Date()), "hh:mm a"),
+        amount: booking.price || 0,
+        bookingStatus: booking.status
+    }));
+
+    return {
+        data: formattedData,
+        pagination: {
+            total,
+            page: pageNumber,
+            limit: limitNumber,
+            totalPage: Math.ceil(total / limitNumber)
+        },
+    };
+}
+
+//Get booking statistics 
+const getBookingStats = async () => {
+    const now = new Date();
+    const currentMonthStart = startOfMonth(now);
+    const previousMonthStart = startOfMonth(subMonths(now, 1));
+
+    const [
+        totalBookings,
+        pendingBooking,
+        totalCompletedSession,
+        totalCancelled,
+        uncompletedBooking,
+        currentMonthBookings,
+        previousMonthBookings
+    ] = await Promise.all([
+        prisma.booking.count(),
+        prisma.booking.count({ where: { status: 'PENDING' } }),
+        prisma.booking.count({ where: { status: 'COMPLETED' } }),
+        prisma.booking.count({ where: { status: 'CANCELLED' } }),
+        prisma.booking.count({ where: { status: 'CONFIRMED' } }),
+        prisma.booking.count({ where: { createdAt: { gte: currentMonthStart } } }),
+        prisma.booking.count({
+            where: {
+                createdAt: {
+                    gte: previousMonthStart,
+                    lt: currentMonthStart
+                }
+            }
+        })
+    ]);
+
+    // Calculate bookingGrowthMetric: (((currentMonthBooking - Previous Month Bookings) / Previous Month Bookings) * 100)
+    let bookingGrowthMetric = 0;
+    if (previousMonthBookings === 0) {
+        bookingGrowthMetric = currentMonthBookings > 0 ? 100 : 0;
+    } else {
+        bookingGrowthMetric = ((currentMonthBookings - previousMonthBookings) / previousMonthBookings) * 100;
+    }
+
+    // Calculate sessionSuccessRate: (((totalCompletedBookingSession / totalBooking(completed+cancelled all)) * 100)
+    const completedPlusCancelled = totalCompletedSession + totalCancelled;
+    const sessionSuccessRate = completedPlusCancelled === 0 ? 0 : (totalCompletedSession / completedPlusCancelled) * 100;
+
+    return {
+        totalBookings,
+        bookingGrowthMetric: parseFloat(bookingGrowthMetric.toFixed(2)),
+        pendingBooking,
+        totalCompletedSession,
+        sessionSuccessRate: parseFloat(sessionSuccessRate.toFixed(2)),
+        uncompletedBooking
+    };
+}
+
+//Get booking receipt by ID
+const getBookingReceipt = async (bookingId: string) => {
+    const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+            user: { select: { name: true, email: true } },
+            tutorProfile: {
+                include: {
+                    user: { select: { name: true, email: true } },
+                    tutorCategories: { include: { category: { select: { name: true } } } }
+                }
+            },
+            availabilitySlot: { select: { date: true, startTime: true, endTime: true } },
+            payment: { select: { amount: true, paymentMethod: true, transactionId: true } }
+        }
+    });
+
+    if (!booking) {
+        throw new AppError("Booking record not found", 404);
+    }
+
+    return {
+        invoiceId: `INV-${booking.id.slice(-5).toUpperCase()}`,
+        bookingId: booking.id,
+        studentName: booking.user?.name || "N/A",
+        studentEmail: booking.user?.email || "N/A",
+        tutorName: booking.tutorProfile?.user?.name || "N/A",
+        tutorEmail: booking.tutorProfile?.user?.email || "N/A",
+        tutorCategoryName: booking.tutorProfile?.tutorCategories.map(tc => tc.category.name).join(", ") || "N/A",
+        bookingStatus: booking.status,
+        availabilitySlotDate: format(booking.availabilitySlot?.date, "MMM dd, yyyy"),
+        availabilitySlotStartTime: format(parse(booking.availabilitySlot?.startTime, "HH:mm", new Date()), "hh:mm a"),
+        availabilitySlotEndTime: format(parse(booking.availabilitySlot?.endTime, "HH:mm", new Date()), "hh:mm a"),
+        paidAmount: booking.payment?.amount || 0,
+        paymentMethod: booking.payment?.paymentMethod || "N/A",
+        transactionId: booking.payment?.transactionId || "N/A"
+    };
+}
+
+//Create new booking with payment (atomic transaction)
+const createBookingWithPayment = async (studentId: string, payload: any) => {
+    const { tutorProfileId, date, startTime, endTime, paymentMethod, transactionId } = payload;
     const bookingDate = new Date(date);
     const dayOfWeek = format(bookingDate, "EEEE");
 
@@ -116,7 +301,7 @@ const createBooking = async (studentId: string, payload: any) => {
     }
 
     // Calculation (hourlyRate / 60) * total minute
-    const calculatedPrice = (tutorData.hourlyRate / 60) * totalMinutes;
+    const calculatedPrice = Math.ceil((tutorData.hourlyRate * totalMinutes) / 60);
 
     // To make decimal numbers look neat (for example: turning 12.505 into 12.51),
     const finalPrice = parseFloat(calculatedPrice.toFixed(2));
@@ -139,7 +324,7 @@ const createBooking = async (studentId: string, payload: any) => {
         });
 
         // create final booking
-        return await tx.booking.create({
+        const booking = await tx.booking.create({
             data: {
                 studentId,
                 tutorProfileId,
@@ -151,67 +336,44 @@ const createBooking = async (studentId: string, payload: any) => {
                 availabilitySlot: true,
                 tutorProfile: {
                     include: {
-                        user: { select: { name: true } }
+                        user: { select: { name: true, image: true } }
                     }
                 }
             }
         });
+
+        // check transaction ID is unique or not
+        const existingPayment = await tx.payment.findUnique({
+            where: { transactionId }
+        });
+
+        if (existingPayment) {
+            throw new AppError("This Transaction ID has already been used", 400, "DUPLICATE_TRANSACTION");
+        }
+
+        // create payment record linked to the new booking
+        const payment = await tx.payment.create({
+            data: {
+                bookingId: booking.id,
+                studentId,
+                paymentMethod,
+                transactionId,
+                amount: finalPrice,
+                status: 'PENDING'
+            }
+        });
+
+        return { booking, payment };
     });
 }
 
-// Update booking status as ’CANCELLED’ of your own bookings.
-const updateBookingStatus = async (studentId: string, bookingId: string) => {
-    //find booking information by bookingId
-    const booking = await prisma.booking.findUnique({
-        where: { id: bookingId },
-        include: { payment: true }
-    });
-
-    if (!booking) {
-        throw new AppError("Booking not found", 404, "NOT_FOUND");
-    }
-
-    // Ownership check (whether the booking belongs to this student)
-    if (booking.studentId !== studentId) {
-        throw new AppError("You are not authorized to cancel this booking", 403, "FORBIDDEN");
-    }
-
-    // check booking status already 'CANCELLED' or not 
-    if (booking.status === "CANCELLED") {
-        throw new AppError("This booking was canceled already.", 400, "ALREADY_CANCELLED");
-    }
-
-    //Business logic check (if the Admin has confirmed, or if the payment status is PENDING/SUCCESS, then cancellation is not allowed)
-    if (booking.status === "CONFIRMED") {
-        throw new AppError("Cannot cancel a confirmed booking. Please contact support.", 400, "ALREADY_CONFIRMED");
-    }
-
-    if (booking.payment && (booking.payment.status === "SUCCESS" || booking.payment.status === "PENDING")) {
-        throw new AppError("Cannot cancel booking because payment is already submitted or verified.", 400, "PAYMENT_EXISTS");
-    }
-
-    // booking cancellation and slot release
-    return await prisma.$transaction(async (tx) => {
-        // booking status update
-        const cancelledBooking = await tx.booking.update({
-            where: { id: bookingId },
-            data: { status: "CANCELLED" }
-        });
-
-        // Make the associated slot available (Free) again.
-        await tx.availabilitySlot.update({
-            where: { id: booking.availabilitySlotId },
-            data: { isBooked: false }
-        });
-
-        return cancelledBooking;
-    });
-}
 
 const bookingService = {
     getAllBookingByAuthor,
-    createBooking,
-    updateBookingStatus
+    getAllBooking,
+    getBookingStats,
+    getBookingReceipt,
+    createBookingWithPayment
 }
 
 

@@ -4,15 +4,19 @@ import auth, { UserRole } from "../../middleware/authMiddleware";
 
 const router = Router();
 
-//  / route for get bookings by author id
+//  / route is getting all bookings by author id
 router.get('/', auth(UserRole.STUDENT), bookingController.getAllBookingByAuthor);
 
-//  / route for create new booking
-router.post('/', auth(UserRole.STUDENT), bookingController.createBooking);
+//  /bookings route is getting all bookings for admin dashboard
+router.get('/admin', auth(UserRole.ADMIN), bookingController.getAllBooking);
 
-//  /update-booking-status route for update booking status
-router.patch('/:id', auth(UserRole.STUDENT), bookingController.updateBookingStatus);
+//  /booking-stats route is getting all bookings stats for admin dashboard
+router.get('/admin/stats', auth(UserRole.ADMIN), bookingController.getBookingStats);
 
+//  /booking-receipt/:id route is getting booking receipt for admin dashboard
+router.get('/admin/receipt/:id', auth(UserRole.ADMIN), bookingController.getBookingReceipt);
 
+//  / route is creating new booking with payment
+router.post('/', auth(UserRole.STUDENT), bookingController.createBookingWithPayment);
 
 export const bookingRouter: Router = router;

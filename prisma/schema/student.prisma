@@ -21,8 +21,10 @@ model Booking {
     availabilitySlot   AvailabilitySlot @relation(fields: [availabilitySlotId], references: [id])
     payment            Payment?
     review             Review?
+    meetingLink        String?
 
     @@index([studentId])
+
     @@index([tutorProfileId])
     @@index([status])
     @@map("bookings")
@@ -62,13 +64,21 @@ model Payment {
     @@map("payments")
 }
 
+enum PaymentAccountType {
+    PERSONAL
+    MERCHANT
+}
+
 model PlatformPaymentAccount {
+
     id            String        @id @default(uuid())
     method        PaymentMethod
     accountNumber String
-    isActive      Boolean       @default(true)
+    accountType   PaymentAccountType @default(PERSONAL)
+    isActive      Boolean            @default(true)
 
     @@map("platform_payment_accounts")
+
 }
 
 // --- Reviews ---

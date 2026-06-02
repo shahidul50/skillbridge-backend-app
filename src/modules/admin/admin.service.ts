@@ -1,63 +1,83 @@
-import { format, parse } from "date-fns";
-import { PaymentMethod, Prisma } from "../../../generated/prisma/client";
+import { format, formatDistanceToNow, parse } from "date-fns";
+import { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../lib/prisma"
 import { UserRole } from "../../middleware/authMiddleware";
 import { AppError } from "../../utils/AppError";
-import { sendEmail } from "../../utils/emailSender";
 
 
-//get all platform account
-const getAllPaymentAccount = async (query: any) => {
-    const { page, limit, sortBy, sortOrder, searchTerm, method, isActive } = query;
+//Get total users, tutors, booking, pendingBooking etc.
+const getDashboardStats = async () => {
+    const [
+        totalUsers,
+        totalTutors,
+        totalStudents,
+        totalBannedUsers,
+        recentBookings,
+        recentPayments
+    ] = await Promise.all([
 
-    const pageNumber = Number(page);
-    const limitNumber = Number(limit);
-    const skip = (pageNumber - 1) * limitNumber;
+        // total users (without Admin)
+        prisma.user.count({ where: { role: { not: 'ADMIN' } } }),
 
-    // search and filter logic array
-    const andConditions: Prisma.PlatformPaymentAccountWhereInput[] = [];
+        // total tutor count
+        prisma.tutorProfile.count(),
 
-    // Searching (Partial match on Account Number)
-    if (searchTerm) {
-        andConditions.push({
-            accountNumber: {
-                contains: searchTerm,
-                mode: 'insensitive',
-            },
-        });
-    }
+        // total student count
+        prisma.user.count({ where: { role: 'STUDENT' } }),
 
-    // Exact Filter: Method
-    if (method) {
-        andConditions.push({ method: method as any });
-    }
+        // total banned users
+        prisma.user.count({ where: { isActive: false } }),
 
-    // Exact Filter: isActive
-    if (isActive) {
-        andConditions.push({ isActive: isActive === "true" });
-    }
-
-    const whereConditions: Prisma.PlatformPaymentAccountWhereInput =
-        andConditions.length > 0 ? { AND: andConditions } : {};
-
-    const [result, total] = await Promise.all([
-        prisma.platformPaymentAccount.findMany({
-            where: whereConditions,
-            skip,
-            take: limitNumber,
-            orderBy: { [sortBy]: sortOrder },
+        // Recent 5 Bookings
+        prisma.booking.findMany({
+            take: 5,
+            orderBy: { createdAt: 'desc' },
+            include: {
+                user: { select: { name: true, email: true, image: true } },
+                tutorProfile: {
+                    include: {
+                        user: { select: { name: true, email: true, image: true } },
+                        tutorCategories: { include: { category: { select: { name: true } } } }
+                    }
+                },
+                availabilitySlot: { select: { date: true, startTime: true, endTime: true } }
+            }
         }),
-        prisma.platformPaymentAccount.count({ where: whereConditions }),
+
+        // Recent 5 payments for activity tracking
+        prisma.payment.findMany({
+            take: 5,
+            orderBy: { submittedAt: 'desc' },
+            include: { user: { select: { name: true } } }
+        })
     ]);
 
     return {
-        data: result,
-        pagination: {
-            total,
-            page: pageNumber,
-            limit: limitNumber,
-            totalPage: Math.ceil(total / limitNumber),
-        },
+        totalUsers,
+        totalTutors,
+        totalStudents,
+        totalBannedUsers,
+        recentBookings: recentBookings.map(booking => ({
+            studentName: booking.user.name,
+            studentEmail: booking.user.email,
+            studentImage: booking.user.image,
+            tutorName: booking.tutorProfile.user.name,
+            tutorEmail: booking.tutorProfile.user.email,
+            tutorImage: booking.tutorProfile.user.image,
+            tutorCategories: booking.tutorProfile.tutorCategories.map(tc => tc.category.name),
+            availabilitySlotDate: format(booking.availabilitySlot.date, 'MMMM dd, yyyy'),
+            availabilitySlotStartTime: format(parse(booking.availabilitySlot.startTime, "HH:mm", new Date()), "hh:mm a"),
+            availabilitySlotEndTime: format(parse(booking.availabilitySlot.endTime, "HH:mm", new Date()), "hh:mm a"),
+            price: booking.price,
+            status: booking.status
+        })),
+        recentPayments: recentPayments.map(payment => ({
+            transactionId: payment.transactionId,
+            studentName: payment.user.name,
+            amount: payment.amount,
+            date: formatDistanceToNow(new Date(payment.submittedAt), { addSuffix: true }),
+            status: payment.status
+        }))
     };
 }
 
@@ -132,6 +152,155 @@ const getAllPlatformUser = async (query: any) => {
     };
 }
 
+// get user by userId
+const getUserByUserId = async (userId: string) => {
+    return await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            isActive: true,
+            image: true,
+            createdAt: true,
+        }
+    });
+}
+
+//get tutor profile details by user id
+const getTutorProfileDetailsByUserId = async (userId: string) => {
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+            tutorProfile: {
+                include: {
+                    bookings: {
+                        where: {
+                            status: { in: ['CONFIRMED', 'COMPLETED'] }
+                        },
+                        include: {
+                            availabilitySlot: true
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    if (!user) {
+        throw new AppError("User not found", 404);
+    }
+
+    if (!user.tutorProfile) {
+        throw new AppError("Tutor profile not found for this user", 404);
+    }
+
+    const tutorProfile = user.tutorProfile;
+
+    // Calculate Total session (hours)
+    let totalMinutes = 0;
+    tutorProfile.bookings.forEach(booking => {
+        if (booking.availabilitySlot) {
+            const start = parse(booking.availabilitySlot.startTime, "HH:mm", new Date());
+            const end = parse(booking.availabilitySlot.endTime, "HH:mm", new Date());
+            const diff = (end.getTime() - start.getTime()) / (1000 * 60);
+            totalMinutes += diff;
+        }
+    });
+    const totalHours = Math.floor(totalMinutes / 60);
+
+    // Calculate totalStudentTaught (unique students)
+    const uniqueStudents = new Set(tutorProfile.bookings.map(b => b.studentId));
+    const totalStudentTaught = uniqueStudents.size;
+
+    return {
+        tutorName: user.name,
+        tutorEmail: user.email,
+        tutorImage: user.image,
+        role: user.role,
+        joiningDate: format(user.createdAt, "MMM dd, yyyy"),
+        status: user.isActive ? 'Active' : 'Banned',
+        tutorTitle: tutorProfile.title,
+        experience: `${tutorProfile.experience} years`,
+        phoneNumber: user.phoneNumber || "N/A",
+        hourlyRate: tutorProfile.hourlyRate || 0,
+        rating: tutorProfile.rating || 0,
+        totalReviews: tutorProfile.totalReviews || 0,
+        totalSession: `${totalHours} hours`,
+        totalStudentTaught: `${totalStudentTaught} unique students`,
+        bio: tutorProfile.bio
+    };
+}
+
+//get student profile details by user id
+const getStudentDetailsByUserId = async (userId: string) => {
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+            bookings: {
+                take: 5,
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    tutorProfile: {
+                        include: {
+                            user: { select: { name: true } },
+                            tutorCategories: { include: { category: { select: { name: true } } } }
+                        }
+                    },
+                    payment: { select: { transactionId: true } }
+                }
+            },
+            payments: {
+                take: 5,
+                orderBy: { submittedAt: 'desc' },
+                include: {
+                    booking: {
+                        include: {
+                            tutorProfile: {
+                                include: {
+                                    user: { select: { name: true } },
+                                    tutorCategories: { include: { category: { select: { name: true } } } }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            _count: {
+                select: { bookings: true }
+            }
+        }
+    });
+
+    if (!user) {
+        throw new AppError("Student not found", 404);
+    }
+
+    return {
+        studentName: user.name,
+        studentEmail: user.email,
+        studentImage: user.image,
+        role: user.role,
+        joiningDate: format(user.createdAt, "MMM dd, yyyy"),
+        accountStatus: user.isActive ? "Active" : "Banned",
+        phoneNumber: user.phoneNumber || "N/A",
+        totalBookings: `${user._count.bookings} bookings`,
+        recentBookings: user.bookings.map((booking) => ({
+            date: format(booking.createdAt, "MMM dd, yyyy"),
+            tutorName: booking.tutorProfile?.user?.name || "N/A",
+            subject: booking.tutorProfile?.tutorCategories.map(tc => tc.category.name) || [],
+            status: booking.status,
+        })),
+        recentPayments: user.payments.map((payment) => ({
+            transactionId: payment.transactionId || "N/A",
+            amount: payment.amount,
+            submittedDate: format(payment.submittedAt, "MMM dd, yyyy"),
+            status: payment.status,
+        })),
+    };
+};
+
 //banned user when he/she break platform rules
 const bannedUserAccount = async (adminId: string, targetUserId: string, status: boolean) => {
     // check is admin banned his own account
@@ -161,358 +330,15 @@ const bannedUserAccount = async (adminId: string, targetUserId: string, status: 
     });
 }
 
-//Get all payment
-const getAllPayments = async (query: any) => {
-    const { page, limit, sortBy, sortOrder, searchTerm, paymentMethod, status } = query;
-
-    const pageNumber = Number(page);
-    const limitNumber = Number(limit);
-    const skip = (pageNumber - 1) * limitNumber;
-
-    const andConditions: Prisma.PaymentWhereInput[] = [];
-
-    // Dynamic Search (Transaction ID or User Email)
-    if (searchTerm) {
-        andConditions.push({
-            OR: [
-                {
-                    transactionId: {
-                        contains: searchTerm,
-                        mode: 'insensitive',
-                    },
-                },
-                {
-                    user: {
-                        email: {
-                            contains: searchTerm,
-                            mode: 'insensitive',
-                        },
-                    },
-                },
-            ],
-        });
-    }
-
-    // Payment method filtering
-    if (paymentMethod) {
-        andConditions.push({ paymentMethod: paymentMethod as PaymentMethod });
-    }
-
-    // Payment status filtering
-    if (status) {
-        andConditions.push({ status });
-    }
-
-    const whereConditions: Prisma.PaymentWhereInput =
-        andConditions.length > 0 ? { AND: andConditions } : {};
-
-    const [result, total] = await Promise.all([
-        prisma.payment.findMany({
-            where: whereConditions,
-            skip,
-            take: limitNumber,
-            orderBy: { [sortBy]: sortOrder },
-            include: {
-                user: {
-                    select: {
-                        email: true,
-                        name: true
-                    }
-                }
-            }
-        }),
-        prisma.payment.count({ where: whereConditions }),
-    ]);
-
-    return {
-        data: result,
-        pagination: {
-            total,
-            page: pageNumber,
-            limit: limitNumber,
-            totalPage: Math.ceil(total / limitNumber),
-        },
-    };
-}
-
-//Update payment status as ‘SUCCESS’ or ‘FAILED’ when payment is submitted.
-const verifyPaymentTransaction = async (paymentId: string, status: "SUCCESS" | "FAILED") => {
-    // check payment exist or not
-    const payment = await prisma.payment.findUnique({
-        where: { id: paymentId },
-        include: {
-            booking: {
-                include: {
-                    user: true,
-                    availabilitySlot: {
-                        include: {
-                            tutorProfile: { include: { user: true } }
-                        }
-                    }
-                }
-            },
-            user: true
-        }
-    });
-
-    if (!payment) {
-        throw new AppError("Payment record not found", 404);
-    }
-
-    //check payment already processed or not
-    if (payment.status !== "PENDING") {
-        throw new AppError("This payment has already been processed", 400);
-    }
-
-    const result = await prisma.$transaction(async (tx) => {
-        // payment status update
-        const updatedPayment = await tx.payment.update({
-            where: { id: paymentId },
-            data: {
-                status: status,
-                verifiedAt: new Date()
-            }
-        });
-
-        // if payment status is 'SUCCESS' then update booking status is 'CONFIRMED'
-        if (status === "SUCCESS") {
-            await tx.booking.update({
-                where: { id: payment.bookingId },
-                data: { status: "CONFIRMED" }
-            });
-        } else {
-            await tx.booking.update({
-                where: { id: payment.bookingId },
-                data: { status: "CANCELLED" }
-            });
-
-            await tx.availabilitySlot.update({
-                where: { id: payment.booking.availabilitySlotId },
-                data: { isBooked: false }
-            });
-        }
-
-        return updatedPayment;
-    });
-
-
-    // sending email tutor and student for confirmation
-    if (status === "SUCCESS") {
-        //student template
-        const studentHtml = `
-            <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
-                <div style="background-color: #4CAF50; color: white; padding: 20px; text-align: center;">
-                    <h2>Payment Confirmed!</h2>
-                </div>
-                <div style="padding: 20px;">
-                    <p>Hi <strong>${payment.user.name}</strong>,</p>
-                    <p>Your payment for <strong>#${payment.transactionId}</strong> has been verified. Your session is now officially booked.</p>
-                    <div style="background: #f4f4f4; padding: 15px; border-radius: 5px;">
-                        <p><strong>Amount:</strong> ${payment.amount} BDT</p>
-                        <p><strong>Tutor:</strong> ${payment.booking.availabilitySlot.tutorProfile.user.name}</p>
-                    </div>
-                </div>
-            </div>`;
-
-        // tutor template
-        const tutorHtml = `
-            <div style="font-family: sans-serif; padding: 20px; border-left: 5px solid #4CAF50;">
-                <h2>New Class Confirmed!</h2>
-                <p>Hello ${payment.booking.availabilitySlot.tutorProfile.user.name},</p>
-                <p>Payment for student <strong>${payment.user.name}</strong> has been verified. Check your schedule.</p>
-            </div>`;
-
-
-        sendEmail({ to: payment.user.email, subject: "Payment Success", html: studentHtml }).catch(e => console.error("Email Error:", e));
-        sendEmail({ to: payment.booking.availabilitySlot.tutorProfile.user.email, subject: "New Booking", html: tutorHtml }).catch(e => console.error("Email Error:", e));
-    } else {
-        const failedHtml = `
-            <div style="font-family: sans-serif; padding: 20px; border: 1px solid #f44336;">
-                <h2 style="color: #f44336;">Payment Verification Failed</h2>
-                <p>Hi ${payment.user.name}, the transaction ID <strong>${payment.transactionId}</strong> you provided could not be verified.</p>
-                <p>Please try again or contact support.</p>
-            </div>`;
-        sendEmail({ to: payment.user.email, subject: "Payment Failed", html: failedHtml }).catch(e => console.error("Email Error:", e));
-    }
-
-    return result;
-}
-
-//Get total users, tutors, booking, pendingBooking etc.
-const getStats = async () => {
-    const [
-        totalStudents,
-        totalTutors,
-        totalBookings,
-        totalPendingBookings,
-        totalCategories,
-        totalRevenue,
-        recentPayments
-    ] = await Promise.all([
-
-        // total student count
-        prisma.user.count({ where: { role: 'STUDENT' } }),
-
-        // total tutor count
-        prisma.tutorProfile.count(),
-
-        // total booking count without cancelled booking
-        prisma.booking.count({ where: { status: { not: 'CANCELLED' } } }),
-
-        // total pending booking
-        prisma.booking.count({ where: { status: 'PENDING' } }),
-
-        // total categories 
-        prisma.category.count(),
-
-        //total Revenue(summation of all success payment)
-        prisma.payment.aggregate({
-            where: { status: 'SUCCESS' },
-            _sum: { amount: true }
-        }),
-
-        // Recent 5 payments for activity tracking
-        prisma.payment.findMany({
-            take: 5,
-            orderBy: { submittedAt: 'desc' },
-            include: { user: { select: { name: true } } }
-        })
-    ]);
-
-    return {
-        overview: {
-            totalStudents,
-            totalTutors,
-            totalBookings,
-            totalPendingBookings,
-            totalCategories,
-            totalRevenue: totalRevenue._sum.amount || 0,
-        },
-        recentActivity: recentPayments.map(p => ({
-            id: p.id,
-            userName: p.user.name,
-            amount: p.amount,
-            status: p.status,
-            time: format(new Date(p.submittedAt), "dd MMM yyyy, hh:mm a")
-        }))
-    };
-}
-
-//Get all booking
-const getAllBooking = async (query: any) => {
-    const { page, limit, sortBy, sortOrder, searchTerm, bookingStatus, paymentStatus } = query;
-
-    const pageNumber = Number(page);
-    const limitNumber = Number(limit);
-    const skip = (pageNumber - 1) * limitNumber;
-
-    const andConditions: Prisma.BookingWhereInput[] = [];
-
-    // remove those booking which status is 'CANCELLED'
-    andConditions.push({
-        status: {
-            not: 'CANCELLED'
-        }
-    });
-
-    // search logic: student name or tutor name
-    if (searchTerm) {
-        andConditions.push({
-            OR: [
-                {
-                    user: {
-                        name: { contains: searchTerm, mode: 'insensitive' }
-                    }
-                },
-                {
-                    tutorProfile: {
-                        user: { name: { contains: searchTerm, mode: 'insensitive' } }
-                    }
-                }
-            ]
-        });
-    }
-
-    // filtering logic
-    if (bookingStatus) andConditions.push({ status: bookingStatus });
-    if (paymentStatus) andConditions.push({ payment: { status: paymentStatus } });
-
-    const whereConditions: Prisma.BookingWhereInput =
-        andConditions.length > 0 ? { AND: andConditions } : {};
-
-    const [result, total] = await Promise.all([
-        prisma.booking.findMany({
-            where: whereConditions,
-            skip,
-            take: limitNumber,
-            orderBy: { [sortBy]: sortOrder },
-            select: {
-                id: true,
-                status: true,
-                price: true,
-                user: {
-                    select: { name: true }
-                },
-                tutorProfile: {
-                    select: {
-                        user: { select: { name: true } }
-                    }
-                },
-                payment: {
-                    select: { status: true, amount: true }
-                },
-                availabilitySlot: {
-                    select: {
-                        date: true,
-                        startTime: true,
-                        endTime: true
-                    }
-                }
-            }
-        }),
-        prisma.booking.count({ where: whereConditions }),
-    ]);
-
-
-    const formattedData = result.map(booking => ({
-        bookingId: booking.id,
-        studentName: booking.user?.name || "N/A",
-        tutorName: booking.tutorProfile?.user?.name || "N/A",
-        slotDate: format(booking.availabilitySlot?.date, 'dd-MM-yyyy'),
-        slotStartTime: format(parse(booking.availabilitySlot?.startTime, "HH:mm", new Date()), "hh:mm a"),
-        slotEndTime: format(parse(booking.availabilitySlot?.endTime, "HH:mm", new Date()), "hh:mm a"),
-        price: booking.price || 0,
-        bookingStatus: booking.status,
-        paymentStatus: booking.payment?.status || "PENDING"
-    }));
-
-    return {
-        data: formattedData,
-        pagination: {
-            total,
-            page: pageNumber,
-            limit: limitNumber,
-            totalPage: Math.ceil(total / limitNumber)
-        },
-    };
-}
-
-//get payment details 
-const getAllPlatformPaymentAccount = async () => {
-    return await prisma.platformPaymentAccount.findMany();
-}
 
 
 const adminService = {
-    getAllPaymentAccount,
+    getDashboardStats,
     getAllPlatformUser,
+    getUserByUserId,
+    getTutorProfileDetailsByUserId,
+    getStudentDetailsByUserId,
     bannedUserAccount,
-    getAllPayments,
-    verifyPaymentTransaction,
-    getStats,
-    getAllBooking,
-    getAllPlatformPaymentAccount
 }
-
 
 export default adminService;

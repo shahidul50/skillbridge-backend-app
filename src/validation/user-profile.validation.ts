@@ -31,3 +31,27 @@ export const bannedUserSchema = z.object({
         }),
     }),
 });
+
+export const tutorProfileDetailsSchema = z.object({
+    params: z.object({
+        userId: z.string({
+            error: "User ID is required",
+        }),
+    }),
+});
+
+export const studentProfileDetailsSchema = z.object({
+    params: z.object({
+        userId: z.string({
+            error: "User ID is required",
+        }),
+    }),
+});
+
+export const userProfileDetailsSchema = z.object({
+    params: z.object({
+        userId: z.string({
+            error: "User ID is required",
+        }),
+    }),
+});
