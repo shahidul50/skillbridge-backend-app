@@ -30,7 +30,7 @@ export const tutorQuerySchema = z.object({
 // Validation schema for setting tutor categories
 export const setTutorCategoriesSchema = z.object({
     body: z.object({
-        categoryId: z.array(z.string().uuid("Invalid Category ID")).min(1, "At least one category is required"),
+        categoryId: z.array(z.string().uuid("Invalid Category ID")).min(1, "At least one category is required").max(1, "Only one category can be added at a time"),
     }),
 });
 
@@ -93,13 +93,12 @@ export const getAvailableSlotsSchema = z.object({
 //validation schema for getting tutor sessions
 export const tutorSessionQuerySchema = z.object({
     query: z.object({
-        page: z.string().optional().default("1"),
-        limit: z.string().optional().default("10"),
+        page: z.string().optional().transform((val) => (val ? Number(val) : 1)),
+        limit: z.string().optional().transform((val) => (val ? Number(val) : 10)),
         sortBy: z.string().optional().default("createdAt"),
         sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
-        searchTerm: z.string().optional(), // student name searching
+        searchTerm: z.string().optional(), // student name, subject and date searching
         status: z.enum(["CONFIRMED", "COMPLETED"]).optional(),
-        availabilitySlotDate: z.string().optional(), // YYYY-MM-DD format
     }),
 });
 
@@ -108,6 +107,13 @@ export const tutorSessionQuerySchema = z.object({
 export const updateBookingStatusByTutorSchema = z.object({
     params: z.object({
         bookingId: z.string({ error: "Booking ID is required in query params" })
+    }),
+    body: z.object({
+        status: z.enum(["CONFIRMED", "COMPLETED"]),
+        meetingLink: z.string().optional(),
+    }).refine((data) => data.status === "COMPLETED" ? data.meetingLink : true, {
+        message: "Meeting link is required when status is COMPLETED",
+        path: ["meetingLink"],
     })
 });
 
@@ -115,5 +121,20 @@ export const updateBookingStatusByTutorSchema = z.object({
 export const deleteTutorExceptionSchema = z.object({
     params: z.object({
         id: z.uuid("Invalid Exception ID format"),
+    }),
+});
+
+// Validation schema for tutor dashboard query
+export const getDashboardRevenueTrendsQuerySchema = z.object({
+    query: z.object({
+        trendPeriod: z.enum(["one-week", "one-month", "three-month", "six-month", "this-year", "all-time"]).optional().default("six-month"),
+    }),
+});
+
+// Validation schema for tutor schedule events query
+export const scheduleEventsQuerySchema = z.object({
+    query: z.object({
+        startDate: z.string({ error: "Start date is required" }).min(1, "Start date is required"),
+        endDate: z.string({ error: "End date is required" }).min(1, "End date is required"),
     }),
 });

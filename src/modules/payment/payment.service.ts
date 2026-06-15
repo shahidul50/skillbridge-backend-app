@@ -67,7 +67,7 @@ const getAllPaymentAccount = async (query: any) => {
             total,
             page: pageNumber,
             limit: limitNumber,
-            totalPage: Math.ceil(total / limitNumber),
+            totalPages: Math.ceil(total / limitNumber),
         },
     };
 }
