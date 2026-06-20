@@ -2,6 +2,7 @@ import { differenceInMinutes, format, parse, startOfMonth, subMonths } from "dat
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import { Prisma } from "../../../generated/prisma/client";
+import { TAllBookingByStudentIdQueryParams, TGetAllBookingByStudentIdResponse, TGetAllBookingByStudentIdMetaResponse, TGetBookingReciptByBookingIdResponse } from "../../types";
 
 
 
@@ -367,13 +368,220 @@ const createBookingWithPayment = async (studentId: string, payload: any) => {
     });
 }
 
+// get all booking for student dashboard
+const getAllBookingByStudentId = async (query: TAllBookingByStudentIdQueryParams, studentId: string): Promise<TGetAllBookingByStudentIdResponse> => {
+    const { page, limit, sortBy, sortOrder, searchTerm, bookingStatus } = query;
+
+    const pageNumber = Number(page);
+    const limitNumber = Number(limit);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const andConditions: Prisma.BookingWhereInput[] = [{ studentId }];
+
+    if (searchTerm) {
+        let parsedDate: Date | null = null;
+
+        // Try to parse date in MM/DD/YYYY format
+        try {
+            parsedDate = parse(searchTerm, "dd/MM/yyyy", new Date());
+            if (Number.isNaN(parsedDate.getTime())) {
+                parsedDate = null;
+            }
+        } catch {
+            parsedDate = null;
+        }
+
+        // If MM/DD/YYYY parsing failed, try ISO format
+        if (!parsedDate) {
+            const isoDate = new Date(searchTerm);
+            if (!Number.isNaN(isoDate.getTime())) {
+                parsedDate = isoDate;
+            }
+        }
+
+        const orConditions: Prisma.BookingWhereInput[] = [
+            { tutorProfile: { user: { name: { contains: searchTerm, mode: 'insensitive' } } } },
+            { tutorProfile: { title: { contains: searchTerm, mode: 'insensitive' } } },
+            {
+                tutorProfile: {
+                    tutorCategories: {
+                        some: {
+                            category: {
+                                name: { contains: searchTerm, mode: 'insensitive' }
+                            }
+                        }
+                    }
+                }
+            }
+        ];
+
+        if (parsedDate) {
+            // Set time to midnight for accurate date comparison
+            const startOfDay = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate(), 0, 0, 0);
+            const endOfDay = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate(), 23, 59, 59);
+            
+            orConditions.push({
+                availabilitySlot: {
+                    date: {
+                        gte: startOfDay,
+                        lte: endOfDay
+                    }
+                }
+            });
+        }
+
+        andConditions.push({ OR: orConditions });
+    }
+
+    if (bookingStatus) {
+        andConditions.push({ status: bookingStatus });
+    }
+
+    const whereConditions: Prisma.BookingWhereInput = { AND: andConditions };
+
+    const [result, total] = await Promise.all([
+        prisma.booking.findMany({
+            where: whereConditions,
+            skip,
+            take: limitNumber,
+            orderBy: { [sortBy]: sortOrder },
+            include: {
+                availabilitySlot: true,
+                tutorProfile: {
+                    include: {
+                        user: { select: { name: true, image: true } },
+                        tutorCategories: { include: { category: { select: { name: true } } } }
+                    }
+                }
+            }
+        }),
+        prisma.booking.count({ where: whereConditions })
+    ]);
+
+    const bookings = result.map(booking => ({
+        id: booking.id,
+        tutorName: booking.tutorProfile?.user?.name || "N/A",
+        tutorTitle: booking.tutorProfile?.title || "N/A",
+        TutorImage: booking.tutorProfile?.user?.image || null,
+        categories: booking.tutorProfile?.tutorCategories.map(tc => tc.category.name) || [],
+        availabilitySlotDate: format(booking.availabilitySlot?.date, 'MMM dd, yyyy'),
+        availabilityStartTime: format(parse(booking.availabilitySlot?.startTime, 'HH:mm', new Date()), 'hh:mm a'),
+        availabilityEndTime: format(parse(booking.availabilitySlot?.endTime, 'HH:mm', new Date()), 'hh:mm a'),
+        price: booking.price || 0,
+        status: booking.status
+    }));
+
+    return {
+        bookings,
+        pagination: {
+            total,
+            page: pageNumber,
+            limit: limitNumber,
+            totalPages: Math.ceil(total / limitNumber)
+        }
+    };
+}
+
+// get booking meta data for student dashboard
+const getBookingsMetaDataByStudentId = async (studentId: string): Promise<TGetAllBookingByStudentIdMetaResponse> => {
+    // fetch bookings for this student including availability slot
+    const bookings = await prisma.booking.findMany({
+        where: { studentId },
+        include: { availabilitySlot: true }
+    });
+
+    // totalInvestment: sum of prices for CONFIRMED bookings
+    const totalInvestment = bookings
+        .filter(b => b.status !== 'CANCELLED' && b.status !== 'PENDING')
+        .reduce((sum, b) => sum + (b.price || 0), 0);
+
+    // completed bookings: to calculate learning hours and completed sessions
+    const completedBookings = bookings.filter(b => b.status === 'COMPLETED' && b.availabilitySlot);
+
+    let totalMinutes = 0;
+    for (const b of completedBookings) {
+        try {
+            const start = parse(b.availabilitySlot!.startTime, 'HH:mm', new Date(b.availabilitySlot!.date));
+            const end = parse(b.availabilitySlot!.endTime, 'HH:mm', new Date(b.availabilitySlot!.date));
+            const minutes = differenceInMinutes(end, start);
+            if (!Number.isNaN(minutes) && minutes > 0) totalMinutes += minutes;
+        } catch (e) {
+            // ignore parse errors for individual records
+        }
+    }
+
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const learningHours = `${hours}h ${minutes}m`;
+
+    const completedSessions = String(completedBookings.length);
+
+    return {
+        totalInvestment,
+        learningHours,
+        completedSessions
+    };
+}
+
+// get booking details for student dashboard
+const getBookingReciptByBookingId = async (bookingId: string, studentId: string): Promise<TGetBookingReciptByBookingIdResponse> => {
+    const booking = await prisma.booking.findFirst({
+        where: { id: bookingId, studentId },
+        include: {
+            tutorProfile: {
+                include: {
+                    user: { select: { name: true } },
+                    tutorCategories: { include: { category: { select: { name: true } } } }
+                }
+            },
+            availabilitySlot: { select: { date: true, startTime: true, endTime: true } },
+            payment: { select: { amount: true, paymentMethod: true, transactionId: true } }
+        }
+    });
+
+    if (!booking) {
+        throw new AppError("Booking not found", 404);
+    }
+
+    const duration = booking.availabilitySlot
+        ? differenceInMinutes(
+            parse(booking.availabilitySlot.endTime, 'HH:mm', new Date(booking.availabilitySlot.date)),
+            parse(booking.availabilitySlot.startTime, 'HH:mm', new Date(booking.availabilitySlot.date))
+        )
+        : 0;
+
+    const categories = booking.tutorProfile?.tutorCategories.map(tc => tc.category.name) || [];
+    const platformServiceFee = 0;
+    const total = (booking.price || 0) + platformServiceFee;
+
+    return {
+        bookingId: booking.id,
+        invoiceId: `INV-${booking.id.slice(-5).toUpperCase()}`,
+        tutorName: booking.tutorProfile?.user?.name || "N/A",
+        categories,
+        availabilitySlotDate: booking.availabilitySlot ? format(booking.availabilitySlot.date, 'MMM dd, yyyy') : "N/A",
+        availabilitySlotStartTime: booking.availabilitySlot ? format(parse(booking.availabilitySlot.startTime, 'HH:mm', new Date()), 'hh:mm a') : "N/A",
+        availabilityEndTime: booking.availabilitySlot ? format(parse(booking.availabilitySlot.endTime, 'HH:mm', new Date()), 'hh:mm a') : "N/A",
+        duration: Math.max(duration, 0),
+        status: booking.status === 'COMPLETED' ? 'COMPLETED' : 'CONFIRMED',
+        price: booking.price || 0,
+        platformServiceFee,
+        total,
+        trancationId: booking.payment?.transactionId || "N/A",
+        paymentMethod: booking.payment?.paymentMethod || "N/A"
+    };
+}
+
 
 const bookingService = {
     getAllBookingByAuthor,
     getAllBooking,
     getBookingStats,
     getBookingReceipt,
-    createBookingWithPayment
+    createBookingWithPayment,
+    getAllBookingByStudentId,
+    getBookingsMetaDataByStudentId,
+    getBookingReciptByBookingId
 }
 
 

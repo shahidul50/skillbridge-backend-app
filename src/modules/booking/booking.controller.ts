@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import bookingService from "./booking.service";
-import { adminBookingQuerySchema, adminBookingReceiptSchema, bookingQuerySchema, createBookingSchema } from "../../validation/booking.validation";
+import { adminBookingQuerySchema, adminBookingReceiptSchema, bookingQuerySchema, createBookingSchema, studentBookingQuerySchema } from "../../validation/booking.validation";
+import {TAllBookingByStudentIdQueryParams} from "../../types"
 
 //get all tutors with pagination, search and filtering.
 const getAllBookingByAuthor = async (req: Request, res: Response, next: NextFunction) => {
@@ -100,12 +101,74 @@ const createBookingWithPayment = async (req: Request, res: Response, next: NextF
     }
 }
 
+// get all booking for student dashboard
+const getAllBookingByStudentId = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const studentId = req.user?.id;
+        //zod validation
+        const validation = studentBookingQuerySchema.safeParse({ query: req.query });
+        if (!validation.success) throw validation.error;
+        const result = await bookingService.getAllBookingByStudentId(validation.data.query as TAllBookingByStudentIdQueryParams, studentId as string);
+        res.status(200).json({
+            success: true,
+            message: `Booking fetched successfully.`,
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
+// get booking meta data for student dashboard
+const getBookingsMetaDataByStudentId = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const studentId = req.user?.id;
+        if(!studentId){
+            throw new Error('User not found')
+        }
+        const result = await bookingService.getBookingsMetaDataByStudentId(studentId as string);
+        res.status(200).json({
+            success: true,
+            message: `Booking meta data fetched successfully.`,
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
+// get booking details for student dashboard
+const getBookingReciptByBookingId = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const studentId = req.user?.id;
+        if (!studentId) {
+            throw new Error('User not found');
+        }
+        // zod validation
+        const validation = adminBookingReceiptSchema.safeParse({ params: req.params });
+        if (!validation.success) throw validation.error;
+
+        const { id:bookingId } = validation.data.params;
+        const result = await bookingService.getBookingReciptByBookingId(bookingId as string, studentId as string);
+        res.status(200).json({
+            success: true,
+            message: `Booking details fetched successfully.`,
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
 const bookingController = {
     getAllBookingByAuthor,
     getAllBooking,
     getBookingStats,
     getBookingReceipt,
-    createBookingWithPayment
+    createBookingWithPayment,
+    getAllBookingByStudentId,
+    getBookingsMetaDataByStudentId,
+    getBookingReciptByBookingId
 }
 
 export default bookingController;

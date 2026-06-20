@@ -47,3 +47,21 @@ export const adminBookingReceiptSchema = z.object({
     }),
 });
 
+export const studentBookingQuerySchema = z.object({
+    query: z.object({
+        page: z.string().optional().default("1"),
+        limit: z.string().optional().default("10"),
+        sortBy: z.string().optional().default("createdAt"),
+        sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
+        searchTerm: z.string().optional(),
+        bookingStatus: z.enum(["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED"]).optional(),
+    }),
+})
+
+// export const studentBookingReceiptSchema = z.object({
+//     params: z.object({
+//         id: z.string({
+//             error: "Booking ID is required",
+//         }),
+//     }),
+// });

@@ -5,10 +5,11 @@ import { updateUserProfileSchema } from "../../validation/user-profile.validatio
 import cloudinary from "../../lib/cloudinary";
 import fs from "fs/promises";
 
-const getUserProfile = async (req: Request, res: Response, next: NextFunction) => {
+//get user profile by userId for student dashboard
+const getUserProfileById = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const loggedInUser: string = req.user?.id as string; // Assuming auth middleware attaches user info to req.user
-        const result = await authService.getUserProfile(loggedInUser);
+        const result = await authService.getUserProfileById(loggedInUser);
         res.status(200).json({
             success: true,
             message: "User profile retrieved successfully",
@@ -20,8 +21,10 @@ const getUserProfile = async (req: Request, res: Response, next: NextFunction) =
     }
 }
 
-const updateUserProfile = async (req: Request, res: Response, next: NextFunction) => {
+//update user profile by userId for student dashboard
+const updateUserProfileById = async (req: Request, res: Response, next: NextFunction) => {
     let localFilePath: string | undefined = req.file?.path;
+    console.log("object", localFilePath)
     try {
         const loggedInUser: string = req.user?.id as string;
 
@@ -39,7 +42,7 @@ const updateUserProfile = async (req: Request, res: Response, next: NextFunction
         // If there's a new avatar image, upload it to Cloudinary
         if (localFilePath) {
             // get old user data 
-            const user = await authService.getUserProfile(loggedInUser);
+            const user = await authService.getUserProfileById(loggedInUser);
 
             // upload new image to cloudinary
             const cloudinaryResult = await cloudinary.uploader.upload(localFilePath, {
@@ -58,7 +61,7 @@ const updateUserProfile = async (req: Request, res: Response, next: NextFunction
             }
         }
 
-        const result = await authService.updateUserProfile(loggedInUser, updateData);
+        const result = await authService.updateUserProfileById(loggedInUser, updateData);
 
         if (result) {
             if (localFilePath) {
@@ -80,6 +83,6 @@ const updateUserProfile = async (req: Request, res: Response, next: NextFunction
 }
 
 export const authController = {
-    getUserProfile,
-    updateUserProfile
+    getUserProfileById,
+    updateUserProfileById
 };

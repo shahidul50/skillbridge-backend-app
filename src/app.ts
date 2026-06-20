@@ -12,6 +12,7 @@ import authRouter from './modules/auth/auth.router';
 import { paymentRouter } from './modules/payment/payment.router';
 import adminRouter from './modules/admin/admin.router';
 import config from './lib/config';
+import { studentRouter } from './modules/student/student.router';
 const app: Application = express();
 
 app.use(express.json());
@@ -32,6 +33,7 @@ app.get('/', (req, res) => {
 app.use('/api/v1/profile', authRouter);
 app.use('/api/v1/categories', categoryRouter);
 app.use('/api/v1/tutors', tutorRouter);
+app.use('/api/v1/students', studentRouter);
 app.use('/api/v1/bookings', bookingRouter);
 app.use('/api/v1/payments', paymentRouter);
 app.use('/api/v1/reviews', reviewRouter);
