@@ -15,8 +15,8 @@ import config from './lib/config';
 import { studentRouter } from './modules/student/student.router';
 const app: Application = express();
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.set('trust proxy', 1);
+
 app.use(
     cors({
         origin: [config.app_url!],
@@ -25,6 +25,9 @@ app.use(
 );
 
 app.all("/api/auth/*splat", toNodeHandler(auth));
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 app.get('/', (req, res) => {
     res.send('Welcome to SkillBridge Backend App');

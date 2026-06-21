@@ -5,10 +5,12 @@
   "main": "server.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "npx tsx --watch src/server.ts",
+    "dev": "npx tsx --watch src/index.ts",
     "seed:admin": "npx tsx src/scripts/seedAdmin.ts",
-    "build": "rm -rf dist && tsc",
-    "preview": "npx tsx dist/src/server.js"
+    "dbuild": "rm -rf dist && tsc",
+    "build": "prisma generate && tsup src/index.ts --format esm --platform node --target node20 --outDir api --external pg-native --clean",
+    "postinstall": "prisma generate",
+    "preview": "npx tsx api/index.js"
   },
   "keywords": [],
   "author": "",
@@ -35,6 +37,7 @@
     "express": "^5.2.1",
     "multer": "^2.0.2",
     "nodemailer": "^7.0.13",
+    "tsup": "^8.5.1",
     "zod": "^4.3.6"
   }
 }

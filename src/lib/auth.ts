@@ -41,7 +41,7 @@ export const auth = betterAuth({
         return context;
       }
       // Check URL and Body
-      const url = new URL(context.request.url);
+      const url = new URL(context.request.url, config.better_auth_url);
       const body = context.body as any;
       // Validate Role Field
       if (
@@ -59,6 +59,18 @@ export const auth = betterAuth({
       if (url.pathname.endsWith("/sign-up/email")) {
         const requestedRole = body?.role;
         const userEmail = body?.email?.toLowerCase();
+
+        // Check if user already exists
+        const existingUser = await prisma.user.findUnique({
+          where: { email: userEmail },
+        });
+
+        if (existingUser) {
+          throw new APIError("BAD_REQUEST", {
+            message: "This email is already registered. Please use another email.",
+          });
+        }
+
         const superAdminEmail = config.seeding_acc_email;
 
         if (requestedRole === "ADMIN") {
