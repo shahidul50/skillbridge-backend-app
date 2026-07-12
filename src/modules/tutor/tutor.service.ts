@@ -207,16 +207,12 @@ const getTutorProfileByProfileId = async (tutorProfileId: string) => {
         // Output is: "2 days ago", "about 1 month ago" 
     }));
 
-    // Flatten category details to a simpler array
-    const tutorSelectedCategory = result.tutorCategories.map(tc => tc.category);
-
     return {
         ...result,
         reviews: formattedReviews,
         totalReviews: reviewCount,
         totalClassHour,
         totalUniqueStudents,
-        tutorSelectedCategory
     };
 }
 

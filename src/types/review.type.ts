@@ -38,3 +38,46 @@ export type TCreateReviewBodyData = {
     rating: number,
     comment: string | null 
 }
+
+export type TGetAllReviewStatsByTutorProfileIdResponse = {
+    tutor:{
+        profileId: string
+        name: string
+        avatar: string | null,
+        pricePerSession: number
+        averageRating: number
+        totalReviewsCount: number
+    },
+    ratingBreakdown: {
+        fiveStars: { count: number, percentage: number },
+        fourStars: { count: number, percentage: number },
+        threeStars: { count: number, percentage: number },
+        twoStars: { count: number, percentage: number },
+        oneStars: { count: number, percentage: number },
+    },
+}
+
+export type TGetAllReviewByTutorProfileIdResponse = {
+    reviews: {
+        id: string,
+        studentName: string,
+        studentAvatar: string | null,
+        rating: number,
+        comment: string,
+        time: string
+    }[],
+    pagination: {
+        total: number
+        page: number,
+        limit: number,
+        totalPages: number
+    }
+}
+
+export type TGetAllReviewByTutorProfileIdQueryParams = {
+    limit: string,
+    page: string,
+    sortBy: string,
+    sortOrder: "most-recent" | "highest-rated" | "lowest-rated",
+}
+

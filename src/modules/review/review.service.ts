@@ -1,8 +1,8 @@
-import { format, parse } from "date-fns";
+import { format, formatDistanceToNow, parse } from "date-fns";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import { Prisma } from "../../../generated/prisma/client";
-import { TCreateReviewBodyData, TGetAllBookingWithReviewQueryParams, TGetAllBookingWithReviewResponse } from '../../types/review.type';
+import { TCreateReviewBodyData, TGetAllBookingWithReviewQueryParams, TGetAllBookingWithReviewResponse, TGetAllReviewByTutorProfileIdQueryParams, TGetAllReviewByTutorProfileIdResponse, TGetAllReviewStatsByTutorProfileIdResponse } from '../../types/review.type';
 
 
 //Get all booking with review summary for a student
@@ -153,10 +153,122 @@ const createReview = async (studentId: string, payload: TCreateReviewBodyData) =
     return result;
 }
 
+const getAllReviewStatsByTutorProfileId = async (tutorProfileId: string): Promise<TGetAllReviewStatsByTutorProfileIdResponse> => {
+    const tutorProfile = await prisma.tutorProfile.findUnique({
+        where: { id: tutorProfileId },
+        select: {
+            id: true,
+            hourlyRate: true,
+            rating: true,
+            totalReviews: true,
+            user: {
+                select: {
+                    name: true,
+                    image: true,
+                },
+            },
+        },
+    });
+
+    if (!tutorProfile) {
+        throw new AppError("Tutor profile not found", 404);
+    }
+
+    const reviewGroups = await prisma.review.groupBy({
+        by: ["rating"],
+        where: { tutorProfileId },
+        _count: { id: true },
+    });
+
+    const countMap = new Map<number, number>(
+        reviewGroups.map((item) => [item.rating, item._count.id])
+    );
+
+    const totalReviews = reviewGroups.reduce((sum, item) => sum + item._count.id, 0);
+
+    const buildBreakdown = (star: number) => {
+        const count = countMap.get(star) ?? 0;
+        const percentage = totalReviews > 0 ? Number(((count / totalReviews) * 100).toFixed(2)) : 0;
+
+        return { count, percentage };
+    };
+
+    return {
+        tutor: {
+            profileId: tutorProfile.id,
+            name: tutorProfile.user.name,
+            avatar: tutorProfile.user.image ?? null,
+            pricePerSession: tutorProfile.hourlyRate,
+            averageRating: Number(tutorProfile.rating.toFixed(2)),
+            totalReviewsCount: totalReviews,
+        },
+        ratingBreakdown: {
+            fiveStars: buildBreakdown(5),
+            fourStars: buildBreakdown(4),
+            threeStars: buildBreakdown(3),
+            twoStars: buildBreakdown(2),
+            oneStars: buildBreakdown(1),
+        },
+    };
+}
+
+const getAllReviewByTutorProfileId = async (
+    tutorProfileId: string,
+    query: TGetAllReviewByTutorProfileIdQueryParams
+): Promise<TGetAllReviewByTutorProfileIdResponse> => {
+    const pageNumber = Number(query.page) || 1;
+    const limitNumber = Number(query.limit) || 10;
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const sortOrderMap: Record<string, Prisma.ReviewOrderByWithRelationInput> = {
+        'most-recent': { createdAt: 'desc' },
+        'highest-rated': { rating: 'desc' },
+        'lowest-rated': { rating: 'asc' },
+    };
+
+    const orderBy = sortOrderMap[query.sortOrder] ?? { createdAt: 'desc' };
+
+    const [reviews, total] = await Promise.all([
+        prisma.review.findMany({
+            where: { tutorProfileId },
+            skip,
+            take: limitNumber,
+            orderBy,
+            include: {
+                user: {
+                    select: {
+                        name: true,
+                        image: true,
+                    },
+                },
+            },
+        }),
+        prisma.review.count({ where: { tutorProfileId } }),
+    ]);
+
+    return {
+        reviews: reviews.map((review) => ({
+            id: review.id,
+            studentName: review.user.name,
+            studentAvatar: review.user.image ?? null,
+            rating: review.rating,
+            comment: review.comment ?? '',
+            time: formatDistanceToNow(review.createdAt, { addSuffix: true }),
+        })),
+        pagination: {
+            total,
+            page: pageNumber,
+            limit: limitNumber,
+            totalPages: Math.ceil(total / limitNumber),
+        },
+    };
+}
 
 const reviewService = {
     getAllBookingWithReview,
-    createReview
+    createReview,
+    getAllReviewStatsByTutorProfileId,
+    getAllReviewByTutorProfileId,
 }
 
 

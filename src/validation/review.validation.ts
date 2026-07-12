@@ -20,3 +20,12 @@ export const reviewValidationSchema = z.object({
         comment: z.string().optional().default(""),
     }),
 });
+
+export const getAllReviewByTutorProfileIdValidationSchema = z.object({
+    query: z.object({
+        page: z.string().optional().default("1"),
+        limit: z.string().optional().default("10"),
+        sortBy: z.string().optional().default("createdAt"),
+        sortOrder: z.enum(["highest-rated", "lowest-rated", "most-recent"]).default("most-recent"),
+    }),
+});
