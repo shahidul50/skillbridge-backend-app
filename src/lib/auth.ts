@@ -1,8 +1,8 @@
+import { sendEmail } from './../utils/emailSender';
 import { APIError, betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma";
 import { createAuthMiddleware } from "better-auth/api";
-import { sendEmail } from "../utils/emailSender";
 import config from "./config";
 
 export const auth = betterAuth({
@@ -15,7 +15,7 @@ export const auth = betterAuth({
     autoSignIn: false,
     requireEmailVerification: true,
   },
-  trustedOrigins: [config.app_url!, "http://localhost:5000"],
+  trustedOrigins: [config.app_url!, "http://localhost:5000", "http://localhost:3000" ],
   user: {
     additionalFields: {
       role: {
@@ -34,6 +34,9 @@ export const auth = betterAuth({
       },
     },
   },
+  advanced: {
+     disableOriginCheck: false 
+  },
   hooks: {
     before: async (context: any) => {
       // Check if Request object exists
@@ -43,6 +46,20 @@ export const auth = betterAuth({
       // Check URL and Body
       const url = new URL(context.request.url, config.better_auth_url);
       const body = context.body as any;
+
+      // Validate Email and Password
+      if (url.pathname.endsWith("/sign-in/email")) {
+        if (!context.body?.email) {
+          throw new APIError("BAD_REQUEST", {
+            message: "Email is required",
+          });
+        } else if (!context.body?.password) {
+          throw new APIError("BAD_REQUEST", {
+            message: "Password is required",
+          });
+        }
+      }
+
       // Validate Role Field
       if (
         context.body?.role !== undefined &&
@@ -80,17 +97,6 @@ export const auth = betterAuth({
         }
       }
 
-      if (url.pathname.endsWith("/sign-in/email")) {
-        if (!context.body?.email) {
-          throw new APIError("BAD_REQUEST", {
-            message: "Email is required",
-          });
-        } else if (!context.body?.password) {
-          throw new APIError("BAD_REQUEST", {
-            message: "Password is required",
-          });
-        }
-      }
       return context;
     },
     after: createAuthMiddleware(async (ctx) => {
@@ -108,7 +114,7 @@ export const auth = betterAuth({
                   title: "New Tutor",
                   bio: "Bio is empty. Update your profile.",
                   hourlyRate: 0,
-                  experience: "Fresh",
+                  experience: "0",
                 },
               });
               console.log("Tutor Profile Account Created");
@@ -122,12 +128,13 @@ export const auth = betterAuth({
   },
   emailVerification: {
     sendOnSignUp: true,
+    sendOnSignIn: true,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url, token }, request) => {
       const verificationUrl = `${config.app_url}/verify-email?token=${token}`;
       await sendEmail({
         to: user.email,
-        subject: "Please verify your email!",
+        subject: "Please verify your email address!",
         html: `<!DOCTYPE html>
                   <html lang="en">
                   <head>

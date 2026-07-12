@@ -75,6 +75,13 @@ const getAllTutors = async (query: GetAllTutorQueryParams) => {
         orderBy = { totalReviews: 'desc' };
     }
 
+    whereConditions.AND.push({
+        user: {
+            isActive: true
+        },
+        isProfileNew: false
+    });
+
     const [tutors, total] = await Promise.all([
         prisma.tutorProfile.findMany({
             where: whereConditions.AND.length > 0 ? whereConditions : {},
@@ -118,7 +125,7 @@ const getAllTutors = async (query: GetAllTutorQueryParams) => {
 //get tutor profile with user data, tutor categories, reviews by tutorProfileId for public tutor page.
 const getTutorProfileByProfileId = async (tutorProfileId: string) => {
     const result = await prisma.tutorProfile.findUnique({
-        where: { id: tutorProfileId },
+        where: { id: tutorProfileId, user: { isActive: true } },
         include: {
             user: {
                 select: {
@@ -156,15 +163,20 @@ const getTutorProfileByProfileId = async (tutorProfileId: string) => {
     }
 
     // Get completed bookings to calculate class hours and unique student count
-    const completedBookings = await prisma.booking.findMany({
-        where: {
-            tutorProfileId,
-            status: "COMPLETED"
-        },
-        include: {
-            availabilitySlot: true
-        }
-    });
+    const [completedBookings, reviewCount] = await Promise.all([
+        prisma.booking.findMany({
+            where: {
+                tutorProfileId,
+                status: "COMPLETED"
+            },
+            include: {
+                availabilitySlot: true
+            }
+        }),
+        prisma.review.count({
+            where: { tutorProfileId }
+        })
+    ]);
 
     let totalMinutes = 0;
     const studentIds = new Set<string>();
@@ -178,12 +190,19 @@ const getTutorProfileByProfileId = async (tutorProfileId: string) => {
         studentIds.add(booking.studentId);
     });
 
-    const totalClassHours = parseFloat((totalMinutes / 60).toFixed(2));
+    // const totalClassHours = parseFloat((totalMinutes / 60).toFixed(2));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const totalClassHour = `${hours}h ${minutes}m`;
     const totalUniqueStudents = studentIds.size;
 
     // recent 10 reviews with time calculation 
     const formattedReviews = result.reviews.map(review => ({
-        ...review,
+        id: review.id,
+        rating: review.rating,
+        comment: review.comment,
+        studentName: review.user.name,
+        studentImage: review.user.image || null,
         timeAgo: formatDistanceToNow(new Date(review.createdAt), { addSuffix: true })
         // Output is: "2 days ago", "about 1 month ago" 
     }));
@@ -194,7 +213,8 @@ const getTutorProfileByProfileId = async (tutorProfileId: string) => {
     return {
         ...result,
         reviews: formattedReviews,
-        totalClassHours,
+        totalReviews: reviewCount,
+        totalClassHour,
         totalUniqueStudents,
         tutorSelectedCategory
     };
@@ -202,10 +222,20 @@ const getTutorProfileByProfileId = async (tutorProfileId: string) => {
 
 //get available slots for a tutor based on weekly availability, exceptions and already booked slots for public tutor page.
 const getAvailableSlots = async (tutorProfileId: string, startDateStr?: string) => {
+    //set Time Zone
+    const options = { timeZone: "Asia/Dhaka", hour12: false };
+
+    const todayStr = new Intl.DateTimeFormat("en-CA", { ...options, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+
+    const currentTimeStr = new Intl.DateTimeFormat("en-US", { ...options, hour: "2-digit", minute: "2-digit" }).format(new Date());
+
+    // convert current time to minutes
+    const [cHours, cMinutes] = currentTimeStr.split(":").map(Number);
+    const currentMinutes = cHours! * 60 + cMinutes!;
+
+    //get current date and time with time zone
     const now = new Date();
     const today = startOfDay(now);
-    const currentTime = format(now, "HH:mm"); // Current Time with (HH:mm) Format (egg. "19:00")
-
     let startFrom = startDateStr ? startOfDay(new Date(startDateStr)) : today;
 
     // Date Validation: Check if the date is in the past
@@ -233,29 +263,35 @@ const getAvailableSlots = async (tutorProfileId: string, startDateStr?: string) 
 
     for (let i = 0; i < daysToGenerate; i++) {
         const currentDate = addDays(startFrom, i);
-        const dateString = format(currentDate, "yyyy-MM-dd");
-        const dayName = format(currentDate, "EEEE");
+        const dateString = new Intl.DateTimeFormat("en-CA", { ...options, year: "numeric", month: "2-digit", day: "2-digit" }).format(currentDate);
+        const dayName = new Intl.DateTimeFormat("en-US", { ...options, weekday: "long" }).format(currentDate);
 
         // Check if the day is an exception (Off-day)
-        const isExceptionDay = exceptions.some(ex => format(new Date(ex.date), "yyyy-MM-dd") === dateString);
+        const isExceptionDay = exceptions.some(ex => {
+            const exDateStr = new Intl.DateTimeFormat("en-CA", { ...options, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ex.date));
+            return exDateStr === dateString;
+        });
         if (isExceptionDay) continue;
 
         const daySchedules = weeklySchedules.filter(ws => ws.dayOfWeek === dayName);
 
         for (const schedule of daySchedules) {
             // Check if the slot is in the past for the current day
-            if (isSameDay(currentDate, now)) {
-                if (schedule.startTime <= currentTime) {
+            if (dateString === todayStr) {
+                const [sHours, sMinutes] = schedule.startTime.split(":").map(Number);
+                const slotStartMinutes = sHours! * 60 + (sMinutes || 0);
+                if (slotStartMinutes <= currentMinutes) {
                     continue; // Remove past time slots for the current day
                 }
             }
 
             // filter out already booked slots
-            const isAlreadyBooked = bookedSlots.some(bs =>
-                format(new Date(bs.date), "yyyy-MM-dd") === dateString &&
-                bs.startTime === schedule.startTime &&
-                bs.endTime === schedule.endTime
-            );
+            const isAlreadyBooked = bookedSlots.some(bs => {
+                const bsDateStr = new Intl.DateTimeFormat("en-CA", { ...options, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(bs.date));
+                return bsDateStr === dateString &&
+                    bs.startTime === schedule.startTime &&
+                    bs.endTime === schedule.endTime;
+            });
 
             if (!isAlreadyBooked) {
                 availableSlots.push({

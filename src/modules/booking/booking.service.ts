@@ -572,6 +572,18 @@ const getBookingReciptByBookingId = async (bookingId: string, studentId: string)
     };
 }
 
+//get platfrom success rate
+const getBookingSuccessRate = async () => {
+    const totalBookings = await prisma.booking.count();
+    const completedBookings = await prisma.booking.count({ where: { status: 'COMPLETED' } });
+
+    const successRate = totalBookings === 0 ? 0 : (completedBookings / totalBookings) * 100;
+
+    return {
+        successRate: Number(successRate.toFixed(2))
+    };
+}
+
 
 const bookingService = {
     getAllBookingByAuthor,
@@ -581,7 +593,8 @@ const bookingService = {
     createBookingWithPayment,
     getAllBookingByStudentId,
     getBookingsMetaDataByStudentId,
-    getBookingReciptByBookingId
+    getBookingReciptByBookingId,
+    getBookingSuccessRate
 }
 
 

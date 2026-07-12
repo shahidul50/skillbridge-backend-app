@@ -391,7 +391,7 @@ var auth = betterAuth({
       if (!context.request) {
         return context;
       }
-      const url = new URL(context.request.url);
+      const url = new URL(context.request.url, config_default.better_auth_url);
       const body = context.body;
       if (context.body?.role !== void 0 && context.body?.role !== "ADMIN" && context.body?.role !== "TUTOR" && context.body?.role !== "STUDENT") {
         throw new APIError("BAD_REQUEST", {
@@ -1212,9 +1212,13 @@ var getTutorProfileByProfileId = async (tutorProfileId) => {
   };
 };
 var getAvailableSlots = async (tutorProfileId, startDateStr) => {
+  const options = { timeZone: "Asia/Dhaka", hour12: false };
+  const todayStr = new Intl.DateTimeFormat("en-CA", { ...options, year: "numeric", month: "2-digit", day: "2-digit" }).format(/* @__PURE__ */ new Date());
+  const currentTimeStr = new Intl.DateTimeFormat("en-US", { ...options, hour: "2-digit", minute: "2-digit" }).format(/* @__PURE__ */ new Date());
+  const [cHours, cMinutes] = currentTimeStr.split(":").map(Number);
+  const currentMinutes = cHours * 60 + cMinutes;
   const now = /* @__PURE__ */ new Date();
   const today = startOfDay(now);
-  const currentTime = format(now, "HH:mm");
   let startFrom = startDateStr ? startOfDay(new Date(startDateStr)) : today;
   if (isBefore(startFrom, today)) {
     throw new AppError("Cannot fetch slots for past dates", 400, "INVALID_DATE");
@@ -1234,20 +1238,26 @@ var getAvailableSlots = async (tutorProfileId, startDateStr) => {
   ]);
   for (let i = 0; i < daysToGenerate; i++) {
     const currentDate = addDays(startFrom, i);
-    const dateString = format(currentDate, "yyyy-MM-dd");
-    const dayName = format(currentDate, "EEEE");
-    const isExceptionDay = exceptions.some((ex) => format(new Date(ex.date), "yyyy-MM-dd") === dateString);
+    const dateString = new Intl.DateTimeFormat("en-CA", { ...options, year: "numeric", month: "2-digit", day: "2-digit" }).format(currentDate);
+    const dayName = new Intl.DateTimeFormat("en-US", { ...options, weekday: "long" }).format(currentDate);
+    const isExceptionDay = exceptions.some((ex) => {
+      const exDateStr = new Intl.DateTimeFormat("en-CA", { ...options, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ex.date));
+      return exDateStr === dateString;
+    });
     if (isExceptionDay) continue;
     const daySchedules = weeklySchedules.filter((ws) => ws.dayOfWeek === dayName);
     for (const schedule of daySchedules) {
-      if (isSameDay(currentDate, now)) {
-        if (schedule.startTime <= currentTime) {
+      if (dateString === todayStr) {
+        const [sHours, sMinutes] = schedule.startTime.split(":").map(Number);
+        const slotStartMinutes = sHours * 60 + (sMinutes || 0);
+        if (slotStartMinutes <= currentMinutes) {
           continue;
         }
       }
-      const isAlreadyBooked = bookedSlots.some(
-        (bs) => format(new Date(bs.date), "yyyy-MM-dd") === dateString && bs.startTime === schedule.startTime && bs.endTime === schedule.endTime
-      );
+      const isAlreadyBooked = bookedSlots.some((bs) => {
+        const bsDateStr = new Intl.DateTimeFormat("en-CA", { ...options, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(bs.date));
+        return bsDateStr === dateString && bs.startTime === schedule.startTime && bs.endTime === schedule.endTime;
+      });
       if (!isAlreadyBooked) {
         availableSlots.push({
           tutorProfileId,
@@ -5045,8 +5055,7 @@ var studentRouter = router8;
 
 // src/app.ts
 var app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.set("trust proxy", 1);
 app.use(
   cors({
     origin: [config_default.app_url],
@@ -5054,6 +5063,8 @@ app.use(
   })
 );
 app.all("/api/auth/*splat", toNodeHandler(auth));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.get("/", (req, res) => {
   res.send("Welcome to SkillBridge Backend App");
 });
