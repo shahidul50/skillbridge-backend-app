@@ -22,3 +22,21 @@ model Category {
 
   @@map("categories")
 }
+
+model ContactMessage {
+  id        String   @id @default(uuid())
+  fullName  String
+  email     String
+  role      ContactMessageRole   // Student, Tutor
+  subject   String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("contact_messages")
+}
+
+enum ContactMessageRole {
+    STUDENT
+    TUTOR
+}

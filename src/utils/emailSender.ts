@@ -5,6 +5,8 @@ interface IEmailOptions {
     to: string;
     subject: string;
     html: string;
+    from?: string;
+    replyTo?: string;
 }
 
 export const sendEmail = async (options: IEmailOptions) => {
@@ -20,12 +22,16 @@ export const sendEmail = async (options: IEmailOptions) => {
     });
 
     // Setup Email content
-    const mailOptions = {
-        from: `"SkillBridge App" <${config.email_user}>`,
+    const mailOptions: any = {
+        from: options.from || `"SkillBridge App" <${config.email_user}>`,
         to: options.to,
         subject: options.subject,
         html: options.html,
     };
+
+    if (options.replyTo) {
+        mailOptions.replyTo = options.replyTo;
+    }
 
     // Sending Email
     try {

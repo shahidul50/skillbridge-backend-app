@@ -13,6 +13,7 @@ import { paymentRouter } from './modules/payment/payment.router';
 import adminRouter from './modules/admin/admin.router';
 import config from './lib/config';
 import { studentRouter } from './modules/student/student.router';
+import { contactRouter } from './modules/contact/contact.router';
 const app: Application = express();
 
 app.set('trust proxy', 1);
@@ -41,6 +42,7 @@ app.use('/api/v1/bookings', bookingRouter);
 app.use('/api/v1/payments', paymentRouter);
 app.use('/api/v1/reviews', reviewRouter);
 app.use('/api/v1/admin', adminRouter);
+app.use('/api/v1/contacts', contactRouter);
 
 app.use(NotFound);
 app.use(errorHandler)
