@@ -10,8 +10,11 @@ router.get('/', auth(UserRole.STUDENT), bookingController.getAllBookingByAuthor)
 //  /bookings route is getting all bookings for admin dashboard
 router.get('/admin', auth(UserRole.ADMIN), bookingController.getAllBooking);
 
-// 
+//  '/platform-success-rate' route is getting platform success rate
 router.get('/platform-success-rate', bookingController.getBookingSuccessRate);
+
+//
+router.get('/about-us/stats', bookingController.getAboutUsStats);
 
 //  /booking-stats route is getting all bookings stats for admin dashboard
 router.get('/admin/stats', auth(UserRole.ADMIN), bookingController.getBookingStats);

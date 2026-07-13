@@ -174,6 +174,19 @@ const getBookingSuccessRate = async (req: Request, res: Response, next: NextFunc
     }
 }
 
+const getAboutUsStats = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const result = await bookingService.getAboutUsStats();
+        res.status(200).json({
+            success: true,
+            message: `Success rate fetched successfully.`,
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
 const bookingController = {
     getAllBookingByAuthor,
     getAllBooking,
@@ -183,7 +196,8 @@ const bookingController = {
     getAllBookingByStudentId,
     getBookingsMetaDataByStudentId,
     getBookingReciptByBookingId,
-    getBookingSuccessRate
+    getBookingSuccessRate,
+    getAboutUsStats
 }
 
 export default bookingController;

@@ -2,7 +2,7 @@ import { differenceInMinutes, format, parse, startOfMonth, subMonths } from "dat
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import { Prisma } from "../../../generated/prisma/client";
-import { TAllBookingByStudentIdQueryParams, TGetAllBookingByStudentIdResponse, TGetAllBookingByStudentIdMetaResponse, TGetBookingReciptByBookingIdResponse } from "../../types";
+import { TAllBookingByStudentIdQueryParams, TGetAboutUsStatsResponse, TGetAllBookingByStudentIdResponse, TGetAllBookingByStudentIdMetaResponse, TGetBookingReciptByBookingIdResponse } from "../../types";
 
 
 
@@ -584,6 +584,28 @@ const getBookingSuccessRate = async () => {
     };
 }
 
+const getAboutUsStats = async (): Promise<TGetAboutUsStatsResponse> => {
+    const [activeStudent, expertTutors, totalSessions] = await Promise.all([
+        prisma.user.count({ where: { role: 'STUDENT', isActive: true } }),
+        prisma.user.count({
+            where: {
+                role: 'TUTOR',
+                isActive: true
+            }
+        }),
+        prisma.booking.count({ where: { status: 'COMPLETED' } }),
+    ]);
+
+    const { successRate } = await getBookingSuccessRate();
+
+    return {
+        activeStudent,
+        expertTutors,
+        totalSessions,
+        successRate: Number(successRate)
+    };
+}
+
 
 const bookingService = {
     getAllBookingByAuthor,
@@ -594,7 +616,8 @@ const bookingService = {
     getAllBookingByStudentId,
     getBookingsMetaDataByStudentId,
     getBookingReciptByBookingId,
-    getBookingSuccessRate
+    getBookingSuccessRate,
+    getAboutUsStats
 }
 
 
