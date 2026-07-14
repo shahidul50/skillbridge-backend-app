@@ -347,8 +347,21 @@ const updateTutorProfile = async (loggedTutorId: string, updatableData: Updatabl
         let updatedTutor;
         let updateUserData: any = {};
 
-        //User table update
-        if (updatableData.userProfile.name || updatableData.userProfile.phoneNumber || updatableData.userProfile.image) {
+        const hasUserProfileUpdate = Boolean(
+            updatableData.userProfile.name !== undefined ||
+            updatableData.userProfile.phoneNumber !== undefined ||
+            updatableData.userProfile.image !== undefined
+        );
+
+        const hasTutorProfileUpdate = Boolean(
+            updatableData.tutorProfile.title !== undefined ||
+            updatableData.tutorProfile.bio !== undefined ||
+            updatableData.tutorProfile.hourlyRate !== undefined ||
+            updatableData.tutorProfile.experience !== undefined
+        );
+
+        // User table update
+        if (hasUserProfileUpdate) {
             updateUserData = await tx.user.update({
                 where: { id: loggedTutorId },
                 data: updatableData.userProfile,
@@ -362,7 +375,7 @@ const updateTutorProfile = async (loggedTutorId: string, updatableData: Updatabl
         }
 
         // Tutor profile table update
-        if (updatableData.tutorProfile.title || updatableData.tutorProfile.bio || updatableData.tutorProfile.hourlyRate || updatableData.tutorProfile.experience) {
+        if (hasTutorProfileUpdate) {
             updatedTutor = await tx.tutorProfile.update({
                 where: { userId: loggedTutorId },
                 data: updatableData.tutorProfile,
@@ -376,7 +389,44 @@ const updateTutorProfile = async (loggedTutorId: string, updatableData: Updatabl
             });
         }
 
-        return { userData: updateUserData, tutorProfile: updatedTutor };
+        const currentTutorProfile = await tx.tutorProfile.findUnique({
+            where: { userId: loggedTutorId },
+            select: {
+                title: true,
+                bio: true,
+                hourlyRate: true,
+                experience: true
+            }
+        });
+
+        const currentUserProfile = await tx.user.findUnique({
+            where: { id: loggedTutorId },
+            select: {
+                image: true
+            }
+        });
+
+        const profileValues = {
+            title: updatedTutor?.title ?? currentTutorProfile?.title ?? null,
+            bio: updatedTutor?.bio ?? currentTutorProfile?.bio ?? null,
+            hourlyRate: updatedTutor?.hourlyRate ?? currentTutorProfile?.hourlyRate ?? null,
+            experience: updatedTutor?.experience ?? currentTutorProfile?.experience ?? null,
+            image: updateUserData.image ?? currentUserProfile?.image ?? null,
+        };
+
+        const isProfileCompleted =
+            Boolean(profileValues.title && profileValues.title.trim() !== "" && profileValues.title !== "New Tutor") &&
+            Boolean(profileValues.bio && profileValues.bio.trim() !== "" && profileValues.bio !== "Bio is empty. Update your profile.") &&
+            typeof profileValues.hourlyRate === "number" && profileValues.hourlyRate > 0 &&
+            Boolean(profileValues.experience && profileValues.experience.trim() !== "" && profileValues.experience !== "0") &&
+            profileValues.image !== null && profileValues.image !== "";
+
+        await tx.tutorProfile.update({
+            where: { userId: loggedTutorId },
+            data: { isProfileNew: !isProfileCompleted }
+        });
+
+        return { userData: updateUserData, tutorProfile: updatedTutor, isProfileNew: !isProfileCompleted };
     });
 }
 
