@@ -2,7 +2,7 @@ import { format, formatDistanceToNow, parse } from "date-fns";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import { Prisma } from "../../../generated/prisma/client";
-import { TCreateReviewBodyData, TGetAllBookingWithReviewQueryParams, TGetAllBookingWithReviewResponse, TGetAllReviewByTutorProfileIdQueryParams, TGetAllReviewByTutorProfileIdResponse, TGetAllReviewStatsByTutorProfileIdResponse } from '../../types/review.type';
+import { TCreateReviewBodyData, TFeaturesReviewResponse, TGetAllBookingWithReviewQueryParams, TGetAllBookingWithReviewResponse, TGetAllReviewByTutorProfileIdQueryParams, TGetAllReviewByTutorProfileIdResponse, TGetAllReviewStatsByTutorProfileIdResponse } from '../../types/review.type';
 
 
 //Get all booking with review summary for a student
@@ -264,11 +264,37 @@ const getAllReviewByTutorProfileId = async (
     };
 }
 
+const getFeaturedReviews = async () : Promise<TFeaturesReviewResponse[]> => {
+    const reviews = await prisma.review.findMany({
+        where: { isFeatured: true },
+        take: 10,
+        include: {
+            user: {
+                select: {
+                    name: true,
+                    image: true,
+                },
+            },
+        },
+        orderBy: { createdAt: 'desc' },
+    });
+
+    return reviews.map((review) => ({
+        id: review.id,
+        studentName: review.user.name,
+        studentTitle: "Verified Student",
+        studentAvatar: review.user.image ?? null,
+        rating: review.rating,
+        comment: review.comment ?? '',
+    }));
+}
+
 const reviewService = {
     getAllBookingWithReview,
     createReview,
     getAllReviewStatsByTutorProfileId,
     getAllReviewByTutorProfileId,
+    getFeaturedReviews
 }
 
 

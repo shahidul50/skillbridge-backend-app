@@ -81,3 +81,12 @@ export type TGetAllReviewByTutorProfileIdQueryParams = {
     sortOrder: "most-recent" | "highest-rated" | "lowest-rated",
 }
 
+// features review type
+export type TFeaturesReviewResponse = {
+    id: string,
+    studentName: string,
+    studentTitle: "Verified Student",
+    studentAvatar: string | null,
+    rating: number,
+    comment: string,
+}

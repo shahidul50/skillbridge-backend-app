@@ -61,7 +61,6 @@ const getAllReviewByTutorProfileId = async (req: Request, res: Response, next: N
     }
 }
 
-
 //create new review
 const createReview = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -82,11 +81,25 @@ const createReview = async (req: Request, res: Response, next: NextFunction) => 
     }
 }
 
+const getFeaturedReviews = async (req: Request, res: Response, next: NextFunction) => {
+    try{
+        const result = await reviewService.getFeaturedReviews();
+        res.status(200).json({
+            success: true,
+            message: 'Featured reviews fetched successfully',
+            data: result
+        });
+    } catch (err: any) {
+        next(err);
+    }
+}
+
 const reviewController = {
     getAllBookingWithReview,
     createReview,
     getAllReviewStatsByTutorProfileId,
     getAllReviewByTutorProfileId,
+    getFeaturedReviews
 }
 
 export default reviewController;

@@ -7,6 +7,9 @@ const router = Router();
 //  "/" route is for getting all booking with review
 router.get('/', auth(UserRole.STUDENT), reviewController.getAllBookingWithReview);
 
+//  "/featured" route is for getting featured reviews
+router.get('/featured', reviewController.getFeaturedReviews);
+
 router.get('/:tutorProfileId/review-stats', reviewController.getAllReviewStatsByTutorProfileId);
 
 router.get('/:tutorProfileId/reviews', reviewController.getAllReviewByTutorProfileId);
